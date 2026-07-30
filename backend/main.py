@@ -84,13 +84,11 @@ def get_users(db: Session = Depends(get_db)):
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
     hashed_password = hash_password(user.password)
 
-    print("Original:", user.password)
-    print("Hashed:", hashed_password)
-
     new_user = User(
         full_name=user.full_name,
         email=user.email,
-        password=hashed_password
+        password=hashed_password,
+        role=user.role
     )
 
     db.add(new_user)
@@ -98,6 +96,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     db.refresh(new_user)
 
     return new_user
+
 @app.get("/users/{user_id}", response_model=UserResponse)
 def get_user(user_id: int, db: Session = Depends(get_db)):
 
@@ -171,6 +170,40 @@ def login(login: UserLogin, db: Session = Depends(get_db)):
     "access_token": token,
     "token_type": "bearer"
 }
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    token = credentials.credentials
+
+    
+
+    email = verify_access_token(token)
+
+    
+
+    user = db.query(User).filter(User.email == email).first()
+
+    
+
+    if user is None:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    return user
+
+def admin_required(
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Only admin can access this resource"
+        )
+
+    return current_user
 @app.get("/profile")
 def profile(
     credentials: HTTPAuthorizationCredentials = Depends(security)
@@ -184,4 +217,16 @@ def profile(
         "message": "Access Granted",
         "email": email
     }
-   
+@app.get("/me", response_model=UserResponse)
+def get_me(
+    current_user: User = Depends(get_current_user)
+):
+    return current_user
+@app.get("/admin")
+def admin_dashboard(
+    current_user: User = Depends(admin_required)
+):
+    return {
+        "message": "Welcome Admin",
+        "user": current_user.full_name
+    }

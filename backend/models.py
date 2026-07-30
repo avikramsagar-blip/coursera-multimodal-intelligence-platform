@@ -1,6 +1,6 @@
-from sqlalchemy import Column, Integer, String, Text, BigInteger, ForeignKey, TIMESTAMP
+from sqlalchemy import Column, Integer, String, Text, BigInteger, ForeignKey, TIMESTAMP,DateTime
 from sqlalchemy.sql import func
-
+from datetime import datetime
 from database import Base
 
 
@@ -8,11 +8,11 @@ class User(Base):
     __tablename__ = "users"
 
     user_id = Column(Integer, primary_key=True, index=True)
-    full_name = Column(String(100), nullable=False)
-    email = Column(String(255), unique=True, nullable=False)
-    password = Column(String(255), nullable=False)
-    created_at = Column(TIMESTAMP, server_default=func.now())
-
+    full_name = Column(String)
+    email = Column(String, unique=True)
+    password = Column(String)
+    role = Column(String, default="student")
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class AIModel(Base):
     __tablename__ = "ai_models"
