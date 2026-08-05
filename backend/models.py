@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, BigInteger, ForeignKey, TIMESTAMP,DateTime
+from sqlalchemy import Column, Integer, String, Text, BigInteger, ForeignKey, TIMESTAMP,DateTime,Float,Boolean
 from sqlalchemy.sql import func
 from datetime import datetime
 from database import Base
@@ -12,6 +12,56 @@ class User(Base):
     email = Column(String, unique=True)
     password = Column(String)
     role = Column(String, default="student")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class Course(Base):
+    __tablename__ = "courses"
+
+    course_id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=False)
+    price = Column(Float, nullable=False)
+    category = Column(String, nullable=False)
+    difficulty = Column(String, nullable=False)
+    thumbnail = Column(String, nullable=True)
+    instructor_id = Column(Integer, ForeignKey("users.user_id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+class Enrollment(Base):
+    __tablename__ = "enrollments"
+
+    enrollment_id = Column(Integer, primary_key=True, index=True)
+
+    student_id = Column(
+        Integer,
+        ForeignKey("users.user_id"),
+        nullable=False
+    )
+
+    course_id = Column(
+        Integer,
+        ForeignKey("courses.course_id"),
+        nullable=False
+    )
+
+    progress = Column(Float, default=0)
+
+    completed = Column(Boolean, default=False)
+
+    enrolled_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
+
+class CourseVideo(Base):
+    __tablename__ = "course_videos"
+
+    video_id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("courses.course_id"), nullable=False)
+    title = Column(String, nullable=False)
+    description = Column(Text)
+    video_url = Column(String, nullable=False)
+    duration = Column(Integer)
+    order_no = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class AIModel(Base):
@@ -45,3 +95,48 @@ class ChatHistory(Base):
     prompt = Column(Text, nullable=False)
     ai_response = Column(Text, nullable=False)
     created_at = Column(TIMESTAMP, server_default=func.now())
+
+class CourseChatHistory(Base):
+    __tablename__ = "course_chat_history"
+
+    chat_id = Column(Integer, primary_key=True, index=True)
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.user_id"),
+        nullable=False
+    )
+
+    course_id = Column(
+        Integer,
+        ForeignKey("courses.course_id"),
+        nullable=False
+    )
+
+    question = Column(Text, nullable=False)
+
+    answer = Column(Text, nullable=False)
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
+class CourseMaterial(Base):
+    __tablename__ = "course_materials"
+
+    material_id = Column(Integer, primary_key=True, index=True)
+
+    course_id = Column(
+        Integer,
+        ForeignKey("courses.course_id"),
+        nullable=False
+    )
+
+    file_name = Column(String, nullable=False)
+
+    file_path = Column(String, nullable=False)
+
+    uploaded_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )

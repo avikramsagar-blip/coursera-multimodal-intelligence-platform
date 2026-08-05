@@ -33,22 +33,31 @@ def create_access_token(data: dict):
     return encoded_jwt
 def verify_access_token(token: str):
     try:
+        print("TOKEN:", token)
+
         payload = jwt.decode(
             token,
             SECRET_KEY,
             algorithms=[ALGORITHM]
         )
+
+        print("PAYLOAD:", payload)
+
         email = payload.get("sub")
 
         if email is None:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
+                status_code=401,
                 detail="Invalid token"
             )
 
         return email
+
     except Exception as e:
-       raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid token"
-    )
+        print("JWT ERROR:", type(e).__name__)
+        print("JWT ERROR MESSAGE:", str(e))
+
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid token"
+        )
