@@ -1,171 +1,144 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+
+import {
+  Box,
+  Button,
+  CircularProgress,
+} from "@mui/material";
+
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+
 import api from "../api/api";
+import Layout from "../components/Layout";
+
+import CourseBanner from "../components/course/CourseBanner";
+import VideoSection from "../components/course/VideoSection";
+import UploadMaterial from "../components/course/UploadMaterial";
+import VectorDatabase from "../components/course/VectorDatabase";
 
 function CourseDetails() {
+
   const { id } = useParams();
+
   const navigate = useNavigate();
 
+  const [course, setCourse] = useState(null);
+
   const [videos, setVideos] = useState([]);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [uploadMessage, setUploadMessage] = useState("");
-  const [vectorMessage, setVectorMessage] = useState("");
+
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+
+    fetchCourse();
+
     fetchVideos();
+
   }, []);
 
+  async function fetchCourse() {
+
+    try {
+
+      const response = await api.get(`/courses/${id}`);
+
+      setCourse(response.data);
+
+    } catch (error) {
+
+      console.log(error);
+
+    } finally {
+
+      setLoading(false);
+
+    }
+
+  }
+
   async function fetchVideos() {
+
     try {
+
       const response = await api.get(`/videos/${id}`);
+
       setVideos(response.data);
+
     } catch (error) {
+
       console.log(error);
+
     }
+
   }
 
-  async function uploadPDF() {
-    if (!selectedFile) {
-      alert("Please select a PDF");
-      return;
-    }
+  if (loading) {
 
-    const formData = new FormData();
-    formData.append("file", selectedFile);
+    return (
 
-    try {
-      const response = await api.post(
-        `/upload-course-material?course_id=${id}`,
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-        }
-      );
+      <Layout>
 
-      console.log(response.data);
-      setUploadMessage("✅ PDF Uploaded Successfully");
-    } catch (error) {
-      console.log(error);
-      alert("PDF Upload Failed");
-    }
-  }
+        <Box
+          display="flex"
+          justifyContent="center"
+          mt={8}
+        >
 
-  async function generateVectorDB() {
-    try {
-      const response = await api.post(`/generate-vector-db/${id}`);
+          <CircularProgress />
 
-      console.log(response.data);
+        </Box>
 
-      setVectorMessage("✅ Vector Database Generated Successfully");
-    } catch (error) {
-      console.log(error);
-      alert("Vector DB Generation Failed");
-    }
+      </Layout>
+
+    );
+
   }
 
   return (
-    <div
-      style={{
-        width: "900px",
-        margin: "30px auto",
-        fontFamily: "Arial",
-      }}
-    >
-      <h1>📚 Course Details</h1>
 
-      <hr />
+    <Layout>
 
-      <h2>📄 Upload Course Material</h2>
+      <Box p={4}>
 
-      <input
-        type="file"
-        accept=".pdf"
-        onChange={(e) => setSelectedFile(e.target.files[0])}
-      />
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/dashboard")}
+          sx={{ mb: 3 }}
+        >
+          Back to Dashboard
+        </Button>
 
-      <br />
-      <br />
+        {course && (
 
-      <button
-        onClick={uploadPDF}
-        style={{
-          padding: "10px 20px",
-          cursor: "pointer",
-        }}
-      >
-        Upload PDF
-      </button>
+          <CourseBanner
 
-      <p>{uploadMessage}</p>
+            course={course}
 
-      <hr />
+            onAITutor={() =>
+              navigate(`/course/${id}/ai`)
+            }
 
-      <h2>🧠 Generate Vector Database</h2>
+          />
 
-      <button
-        onClick={generateVectorDB}
-        style={{
-          padding: "10px 20px",
-          cursor: "pointer",
-        }}
-      >
-        Generate Vector DB
-      </button>
+        )}
 
-      <p>{vectorMessage}</p>
+        <VideoSection videos={videos} />
 
-      <hr />
+        <UploadMaterial
+          courseId={id}
+        />
 
-      <h2>🎥 Course Videos</h2>
+        <VectorDatabase
+          courseId={id}
+        />
 
-      {videos.length === 0 ? (
-        <p>No Videos Found</p>
-      ) : (
-        videos.map((video) => (
-          <div
-            key={video.video_id}
-            style={{
-              border: "1px solid gray",
-              padding: "20px",
-              borderRadius: "10px",
-              marginBottom: "20px",
-            }}
-          >
-            <h3>{video.title}</h3>
+      </Box>
 
-            <p>{video.description}</p>
+    </Layout>
 
-            <p>
-              <b>Duration:</b> {video.duration} sec
-            </p>
-
-            <a
-              href={video.video_url}
-              target="_blank"
-              rel="noreferrer"
-            >
-              ▶ Watch Video
-            </a>
-          </div>
-        ))
-      )}
-
-      <hr />
-
-      <button
-        onClick={() => navigate(`/course/${id}/ai`)}
-        style={{
-          padding: "12px 25px",
-          cursor: "pointer",
-          fontSize: "16px",
-        }}
-      >
-        🤖 Ask AI Tutor
-      </button>
-    </div>
   );
+
 }
 
 export default CourseDetails;

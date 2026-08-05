@@ -11,14 +11,16 @@ function Layout({ children }) {
         <Sidebar />
 
         <Box
-          component="main"
-          sx={{
-            flexGrow: 1,
-            padding: 3,
-            backgroundColor: "#f5f7fb",
-            minHeight: "100vh",
-          }}
-        >
+component="main"
+sx={{
+flexGrow:1,
+p:4,
+mt:2,
+backgroundColor:"#F5F7FB",
+minHeight:"calc(100vh - 64px)",
+}}
+>
+        
           {children}
         </Box>
       </Box>

@@ -1,99 +1,151 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../api/api";
 
+import {
+  Box,
+  Typography,
+  Grid,
+  Paper,
+  Divider,
+} from "@mui/material";
+
+import api from "../api/api";
+import Layout from "../components/Layout";
+
+import DashboardHeader from "../components/dashboard/DashboardHeader";
+import SearchBar from "../components/dashboard/SearchBar";
+import StatsSection from "../components/dashboard/StatsSection";
+import CourseCard from "../components/dashboard/CourseCard";
 
 function Dashboard() {
+
   const navigate = useNavigate();
 
   const [courses, setCourses] = useState([]);
+
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     fetchCourses();
   }, []);
 
   async function fetchCourses() {
+
     try {
+
       const response = await api.get("/courses");
+
       setCourses(response.data);
+
     } catch (error) {
+
       console.log(error);
-      alert("Failed to load courses");
+
     }
+
   }
 
-return (
-  <Layout>
+  const filteredCourses = courses.filter((course) =>
+    course.title
+      .toLowerCase()
+      .includes(search.toLowerCase())
+  );
 
-    <div className="container mt-4">
+  return (
 
-      <h2 className="mb-4 text-center">
-        📚 Available Courses
-      </h2>
+    <Layout>
 
-      <div className="row">
+      <Box
+        sx={{
+          p: 4,
+        }}
+      >
 
-        {courses.length === 0 ? (
+        <DashboardHeader />
 
-          <div className="text-center">
-            <h4>No Courses Available</h4>
-          </div>
+        <SearchBar
+          value={search}
+          onChange={(e) =>
+            setSearch(e.target.value)
+          }
+        />
+
+        <StatsSection
+          totalCourses={courses.length}
+        />
+
+        <Divider sx={{ my: 4 }} />
+
+        <Typography
+          variant="h5"
+          fontWeight="bold"
+          mb={3}
+        >
+          📚 Featured Courses
+        </Typography>
+
+        {filteredCourses.length === 0 ? (
+
+          <Paper
+            sx={{
+              p: 5,
+              textAlign: "center",
+              borderRadius: 4,
+            }}
+          >
+
+            <Typography variant="h6">
+
+              No Courses Found
+
+            </Typography>
+
+          </Paper>
 
         ) : (
 
-          courses.map((course) => (
+          <Grid
+            container
+            spacing={3}
+          >
 
-            <div
-              className="col-md-4 mb-4"
-              key={course.course_id}
-            >
+            {filteredCourses.map((course) => (
 
-              <div className="card shadow h-100">
+              <Grid
+                key={course.course_id}
+                size={{
+                  xs: 12,
+                  md: 6,
+                  lg: 6,
+                }}
+              >
 
-                <div className="card-body">
+                <CourseCard
 
-                  <h4>{course.title}</h4>
+                  course={course}
 
-                  <p>{course.description}</p>
+                  onOpen={() =>
+                    navigate(
+                      `/course/${course.course_id}`
+                    )
+                  }
 
-                  <p>
-                    <strong>Category:</strong> {course.category}
-                  </p>
+                />
 
-                  <p>
-                    <strong>Difficulty:</strong> {course.difficulty}
-                  </p>
+              </Grid>
 
-                  <p>
-                    <strong>Price:</strong> ₹{course.price}
-                  </p>
+            ))}
 
-                </div>
-
-                <div className="card-footer bg-white border-0">
-
-                  <button
-                    className="btn btn-primary w-100"
-                    onClick={() =>
-                      navigate(`/course/${course.course_id}`)
-                    }
-                  >
-                    Open Course
-                  </button>
-
-                </div>
-
-              </div>
-
-            </div>
-
-          ))
+          </Grid>
 
         )}
 
-      </div>
+      </Box>
 
-    </div>
+    </Layout>
 
-  </Layout>
-)};
+  );
+
+}
+
+export default Dashboard;
