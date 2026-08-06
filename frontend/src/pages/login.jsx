@@ -40,16 +40,16 @@ function Login() {
       setError("");
 
       const response = await api.post("/login", {
-        email,
-        password,
-      });
+  email,
+  password,
+});
 
-      localStorage.setItem(
-        "token",
-        response.data.access_token
-      );
+localStorage.setItem(
+  "token",
+  response.data.access_token
+);
 
-      navigate("/dashboard");
+navigate("/dashboard");
 
     } catch (err) {
 

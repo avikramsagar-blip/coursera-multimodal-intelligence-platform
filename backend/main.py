@@ -258,7 +258,7 @@ def get_me(
     return current_user
 @app.get("/admin")
 def admin_dashboard(
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(get_current_user)
 ):
     return {
         "message": "Welcome Admin",
@@ -267,7 +267,7 @@ def admin_dashboard(
 @app.post("/courses", response_model=CourseResponse)
 def create_course(
     course: CourseCreate,
-    current_user: User = Depends(admin_required),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     new_course = Course(
@@ -307,7 +307,7 @@ def get_course(course_id: int, db: Session = Depends(get_db)):
 def update_course(
     course_id: int,
     updated_course: CourseUpdate,
-    current_user: User = Depends(admin_required),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
 
@@ -334,7 +334,7 @@ def update_course(
 @app.delete("/courses/{course_id}")
 def delete_course(
     course_id: int,
-    current_user: User = Depends(admin_required),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
 
@@ -433,7 +433,7 @@ def update_progress(
 @app.post("/videos", response_model=VideoResponse)
 def create_video(
     video: VideoCreate,
-    current_user: User = Depends(admin_required),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
 
@@ -478,7 +478,7 @@ def get_videos(
 def update_video(
     video_id: int,
     video: VideoCreate,
-    current_user: User = Depends(admin_required),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
 
@@ -506,7 +506,7 @@ def update_video(
 @app.delete("/videos/{video_id}")
 def delete_video(
     video_id: int,
-    current_user: User = Depends(admin_required),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
 
@@ -574,7 +574,7 @@ def course_chat(
 def upload_course_material(
     course_id: int,
     file: UploadFile = File(...),
-    current_user: User = Depends(admin_required),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
 
@@ -649,7 +649,7 @@ def get_chunks(
 @app.post("/generate-vector-db/{course_id}")
 def generate_vector_db(
     course_id: int,
-    current_user: User = Depends(admin_required),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
 

@@ -1,122 +1,316 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
-import Navbar from "../components/Navbar";
+import { useNavigate, useParams } from "react-router-dom";
+import ReactMarkdown from "react-markdown";
+
+import {
+  Box,
+  Paper,
+  Typography,
+  TextField,
+  Button,
+  Avatar,
+  Stack,
+  CircularProgress,
+  IconButton,
+} from "@mui/material";
+
+import SmartToyIcon from "@mui/icons-material/SmartToy";
+import PersonIcon from "@mui/icons-material/Person";
+import SendIcon from "@mui/icons-material/Send";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import DeleteIcon from "@mui/icons-material/Delete";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+
+import Layout from "../components/Layout";
 import api from "../api/api";
 
 function AITutor() {
-
   const { id } = useParams();
+  const navigate = useNavigate();
 
   const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState("");
+  const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
 
   async function askAI() {
+    if (!question.trim()) return;
 
-    if (!question.trim()) {
-      alert("Please enter a question");
-      return;
-    }
+    const userQuestion = question;
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        text: userQuestion,
+      },
+    ]);
+
+    setQuestion("");
+    setLoading(true);
 
     try {
-
-      setLoading(true);
-
       const response = await api.post(
         "/course-rag-chat",
         {
           course_id: Number(id),
-          question: question,
+          question: userQuestion,
         }
       );
 
-      setAnswer(response.data.answer);
-
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          text: response.data.answer,
+        },
+      ]);
     } catch (error) {
-
-      console.log(error);
-
-      alert(
-        error.response?.data?.detail ||
-        "Failed to get AI response"
-      );
-
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          text:
+            error.response?.data?.detail ||
+            "Failed to get AI response.",
+        },
+      ]);
     } finally {
-
       setLoading(false);
-
     }
   }
 
-  return (
-    <>
-      <Navbar />
+  function handleKeyDown(e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      askAI();
+    }
+  }
 
-      <div className="container mt-5">
+  function clearChat() {
+    setMessages([]);
+  }
 
-        <div className="card shadow">
+  function copyMessage(text) {
+    navigator.clipboard.writeText(text);
+  }  return (
+    <Layout>
+      <Box sx={{ maxWidth: 1000, mx: "auto", py: 4 }}>
 
-          <div className="card-body">
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+          mb={3}
+        >
+          <Button
+            startIcon={<ArrowBackIcon />}
+            variant="outlined"
+            onClick={() => navigate(-1)}
+          >
+            Back
+          </Button>
 
-            <h2 className="mb-4">
-              🤖 AI Tutor
-            </h2>
+          <Typography
+            variant="h4"
+            fontWeight="bold"
+          >
+            🤖 AI Tutor
+          </Typography>
 
-            <textarea
-              className="form-control"
-              rows="5"
-              placeholder="Ask anything about this course..."
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-            />
+          <IconButton
+            color="error"
+            onClick={clearChat}
+          >
+            <DeleteIcon />
+          </IconButton>
+        </Stack>
 
-            <button
-              className="btn btn-primary mt-3"
-              onClick={askAI}
-              disabled={loading}
+        <Paper
+          elevation={3}
+          sx={{
+            height: "65vh",
+            overflowY: "auto",
+            p: 3,
+            borderRadius: 4,
+            mb: 3,
+            bgcolor: "#F8FAFC",
+          }}
+        >
+
+          {messages.length === 0 && (
+
+            <Typography
+              align="center"
+              sx={{
+                mt: 15,
+                color: "text.secondary",
+                whiteSpace: "pre-line",
+                lineHeight: 2,
+                fontSize: 18,
+              }}
+            >
+{`🤖 Welcome to AI Tutor
+
+Ask anything from your uploaded course material.
+
+Examples:
+
+• Explain JWT Authentication
+
+• Summarize Chapter 2
+
+• Difference between FastAPI and Flask
+
+• Generate Interview Questions`}
+            </Typography>
+
+          )}
+
+          {messages.map((msg, index) => (
+
+            <Stack
+              key={index}
+              direction="row"
+              spacing={2}
+              justifyContent={
+                msg.role === "user"
+                  ? "flex-end"
+                  : "flex-start"
+              }
+              mb={3}
             >
 
-              {loading ? "Thinking..." : "Ask AI"}
+              {msg.role === "assistant" && (
 
-            </button>
+                <Avatar
+                  sx={{
+                    bgcolor: "#7C3AED",
+                  }}
+                >
+                  <SmartToyIcon />
+                </Avatar>
 
-            {answer && (
+              )}
 
-              <div
-                className="card mt-4 border-success"
+              <Paper
+                elevation={1}
+                sx={{
+                  p: 2,
+                  maxWidth: "70%",
+                  bgcolor:
+                    msg.role === "user"
+                      ? "#6366F1"
+                      : "#EEF2FF",
+                  color:
+                    msg.role === "user"
+                      ? "#fff"
+                      : "#000",
+                  borderRadius: 3,
+                }}
               >
 
-                <div className="card-header bg-success text-white">
+                <ReactMarkdown>
+                  {msg.text}
+                </ReactMarkdown>
 
-                  AI Response
+                {msg.role === "assistant" && (
 
-                </div>
-
-                <div className="card-body">
-
-                  <p
-                    style={{
-                      whiteSpace: "pre-wrap",
-                      fontSize: "16px"
-                    }}
+                  <Button
+                    size="small"
+                    startIcon={<ContentCopyIcon />}
+                    sx={{ mt: 1 }}
+                    onClick={() =>
+                      copyMessage(msg.text)
+                    }
                   >
+                    Copy
+                  </Button>
 
-                    {answer}
+                )}
 
-                  </p>
+              </Paper>
 
-                </div>
+              {msg.role === "user" && (
 
-              </div>
+                <Avatar
+                  sx={{
+                    bgcolor: "#4F46E5",
+                  }}
+                >
+                  <PersonIcon />
+                </Avatar>
 
-            )}
+              )}
 
-          </div>
+            </Stack>
 
-        </div>
+          ))}
 
-      </div>
-    </>
+          {loading && (
+
+            <Stack
+              direction="row"
+              spacing={2}
+              alignItems="center"
+            >
+
+              <Avatar
+                sx={{
+                  bgcolor: "#7C3AED",
+                }}
+              >
+                <SmartToyIcon />
+              </Avatar>
+
+              <CircularProgress size={22} />
+
+              <Typography fontWeight="bold">
+                Thinking...
+              </Typography>
+
+            </Stack>
+
+          )}
+
+        </Paper>
+
+        <Stack
+          direction="row"
+          spacing={2}
+        >
+
+          <TextField
+            fullWidth
+            multiline
+            minRows={2}
+            maxRows={5}
+            variant="outlined"
+            placeholder="Ask your question..."
+            value={question}
+            onChange={(e) =>
+              setQuestion(e.target.value)
+            }
+            onKeyDown={handleKeyDown}
+          />
+
+          <Button
+            variant="contained"
+            size="large"
+            endIcon={<SendIcon />}
+            disabled={loading}
+            onClick={askAI}
+            sx={{
+              minWidth: 170,
+              borderRadius: 3,
+            }}
+          >
+            Ask AI
+          </Button>
+
+        </Stack>
+
+      </Box>
+    </Layout>
   );
 }
 

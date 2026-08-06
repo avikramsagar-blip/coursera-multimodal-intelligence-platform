@@ -54,10 +54,12 @@ def verify_access_token(token: str):
         return email
 
     except Exception as e:
-        print("JWT ERROR:", type(e).__name__)
-        print("JWT ERROR MESSAGE:", str(e))
+       print("JWT ERROR:", type(e).__name__)
+       print("JWT ERROR MESSAGE:", str(e))
 
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid token"
-        )
+       raise HTTPException(
+           
+           
+           status_code=401,
+           detail=str(e)
+    )

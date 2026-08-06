@@ -7,33 +7,39 @@ import {
   Alert,
   CircularProgress,
   Box,
+  Chip,
+  Stack,
 } from "@mui/material";
 
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import PsychologyIcon from "@mui/icons-material/Psychology";
 
 import api from "../../api/api";
 
 function VectorDatabase({ courseId }) {
   const [loading, setLoading] = useState(false);
-
-  const [status, setStatus] = useState("");
+  const [success, setSuccess] = useState(false);
+  const [message, setMessage] = useState("");
 
   async function generateVectorDB() {
     try {
       setLoading(true);
-      setStatus("");
+      setMessage("");
 
       const response = await api.post(
         `/generate-vector-db/${courseId}`
       );
 
-      setStatus(response.data);
+      setSuccess(true);
+      setMessage(response.data);
 
     } catch (error) {
 
       console.log(error);
 
-      setStatus("Failed to generate Vector Database.");
+      setSuccess(false);
+      setMessage("Vector Database generation failed.");
 
     } finally {
 
@@ -51,55 +57,87 @@ function VectorDatabase({ courseId }) {
         mb: 4,
       }}
     >
-      <Typography
-        variant="h5"
-        fontWeight="bold"
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="center"
         mb={3}
       >
-        ⚡ AI Vector Database
-      </Typography>
+        <Typography
+          variant="h5"
+          fontWeight="bold"
+        >
+          ⚡ AI Knowledge Base
+        </Typography>
+
+        <Chip
+          color={
+            success ? "success" : "warning"
+          }
+          icon={
+            success ? (
+              <CheckCircleIcon />
+            ) : (
+              <PsychologyIcon />
+            )
+          }
+          label={
+            success
+              ? "AI Ready"
+              : "Not Generated"
+          }
+        />
+      </Stack>
 
       <Typography
         color="text.secondary"
-        mb={3}
+        mb={4}
       >
-        Generate embeddings from uploaded course material
-        so the AI Tutor can answer questions using RAG.
+        Generate embeddings from uploaded
+        course material to enable
+        Retrieval-Augmented Generation (RAG)
+        inside the AI Tutor.
       </Typography>
 
-      <Button
-        variant="contained"
-        size="large"
-        startIcon={<AutoAwesomeIcon />}
-        disabled={loading}
-        onClick={generateVectorDB}
+      <Box
         sx={{
-          borderRadius: 3,
-          textTransform: "none",
+          display: "flex",
+          justifyContent: "center",
         }}
       >
-        {loading ? (
-          <CircularProgress
-            size={24}
-            color="inherit"
-          />
-        ) : (
-          "Generate Vector Database"
-        )}
-      </Button>
+        <Button
+          size="large"
+          variant="contained"
+          startIcon={<AutoAwesomeIcon />}
+          disabled={loading}
+          onClick={generateVectorDB}
+          sx={{
+            px: 5,
+            py: 1.5,
+          }}
+        >
+          {loading ? (
+            <CircularProgress
+              size={24}
+              color="inherit"
+            />
+          ) : (
+            "Generate Vector Database"
+          )}
+        </Button>
+      </Box>
 
-      {status && (
-        <Box mt={3}>
-          <Alert
-            severity={
-              status.toLowerCase().includes("fail")
-                ? "error"
-                : "success"
-            }
-          >
-            {status}
-          </Alert>
-        </Box>
+      {message && (
+        <Alert
+          sx={{ mt: 4 }}
+          severity={
+            success
+              ? "success"
+              : "error"
+          }
+        >
+          {message}
+        </Alert>
       )}
     </Paper>
   );

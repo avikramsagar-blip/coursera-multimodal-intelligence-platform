@@ -9,23 +9,24 @@ import {
 
 import SchoolIcon from "@mui/icons-material/School";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 
 function CourseBanner({ course, onAITutor }) {
   return (
     <Paper
       elevation={3}
       sx={{
-        borderRadius: 4,
         overflow: "hidden",
+        borderRadius: 4,
         mb: 4,
       }}
     >
       {/* Banner */}
       <Box
         sx={{
-          height: 220,
+          height: 250,
           background:
-            "linear-gradient(135deg,#1976D2,#42A5F5)",
+            "linear-gradient(135deg, #4F46E5, #7C3AED)",
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
@@ -33,14 +34,14 @@ function CourseBanner({ course, onAITutor }) {
       >
         <SchoolIcon
           sx={{
-            fontSize: 90,
-            color: "white",
+            color: "#fff",
+            fontSize: 110,
           }}
         />
       </Box>
 
+      {/* Content */}
       <Box p={4}>
-
         <Typography
           variant="h4"
           fontWeight="bold"
@@ -51,46 +52,64 @@ function CourseBanner({ course, onAITutor }) {
 
         <Typography
           color="text.secondary"
-          mb={3}
+          sx={{
+            mb: 3,
+            lineHeight: 1.8,
+          }}
         >
           {course.description}
         </Typography>
 
-        <Stack
-          direction="row"
-          spacing={2}
-          mb={3}
-          flexWrap="wrap"
-        >
-          <Chip
-            label={course.category}
-            color="primary"
-          />
-
-          <Chip
-            label={course.difficulty}
-            color="success"
-          />
-
-          <Chip
-            label={`₹ ${course.price}`}
-            color="warning"
-          />
-        </Stack>
-
-        <Button
-          variant="contained"
-          size="large"
-          startIcon={<SmartToyIcon />}
-          onClick={onAITutor}
+        {/* Chips */}
+        <Box
           sx={{
-            borderRadius: 3,
-            textTransform: "none",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 1.5,
+            mb: 4,
           }}
         >
-          Open AI Tutor
-        </Button>
+          <Chip
+            color="primary"
+            label={course.category}
+          />
 
+          <Chip
+            color="secondary"
+            label={course.difficulty}
+          />
+
+          <Chip
+            color="success"
+            label={`₹ ${course.price}`}
+          />
+        </Box>
+
+        {/* Buttons */}
+        <Stack
+          direction={{
+            xs: "column",
+            sm: "row",
+          }}
+          spacing={2}
+        >
+          <Button
+            variant="contained"
+            size="large"
+            startIcon={<PlayArrowIcon />}
+          >
+            Start Learning
+          </Button>
+
+          <Button
+            variant="outlined"
+            size="large"
+            startIcon={<SmartToyIcon />}
+            onClick={onAITutor}
+          >
+            AI Tutor
+          </Button>
+        </Stack>
       </Box>
     </Paper>
   );

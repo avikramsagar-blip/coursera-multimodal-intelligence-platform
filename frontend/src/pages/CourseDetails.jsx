@@ -5,6 +5,7 @@ import {
   Box,
   Button,
   CircularProgress,
+  Grid,
 } from "@mui/material";
 
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -18,127 +19,91 @@ import UploadMaterial from "../components/course/UploadMaterial";
 import VectorDatabase from "../components/course/VectorDatabase";
 
 function CourseDetails() {
-
   const { id } = useParams();
-
   const navigate = useNavigate();
 
   const [course, setCourse] = useState(null);
-
   const [videos, setVideos] = useState([]);
-
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-
     fetchCourse();
-
     fetchVideos();
-
   }, []);
 
   async function fetchCourse() {
-
     try {
-
       const response = await api.get(`/courses/${id}`);
-
       setCourse(response.data);
-
     } catch (error) {
-
       console.log(error);
-
     } finally {
-
       setLoading(false);
-
     }
-
   }
 
   async function fetchVideos() {
-
     try {
-
       const response = await api.get(`/videos/${id}`);
-
       setVideos(response.data);
-
     } catch (error) {
-
       console.log(error);
-
     }
-
   }
 
   if (loading) {
-
     return (
-
       <Layout>
-
         <Box
           display="flex"
           justifyContent="center"
-          mt={8}
+          alignItems="center"
+          minHeight="70vh"
         >
-
-          <CircularProgress />
-
+          <CircularProgress size={60} />
         </Box>
-
       </Layout>
-
     );
-
   }
 
   return (
-
     <Layout>
-
-      <Box p={4}>
+      <Box sx={{ p: 4 }}>
 
         <Button
           startIcon={<ArrowBackIcon />}
-          onClick={() => navigate("/dashboard")}
+          variant="outlined"
           sx={{ mb: 3 }}
+          onClick={() => navigate("/dashboard")}
         >
           Back to Dashboard
         </Button>
 
         {course && (
-
           <CourseBanner
-
             course={course}
-
             onAITutor={() =>
               navigate(`/course/${id}/ai`)
             }
-
           />
-
         )}
 
-        <VideoSection videos={videos} />
+        <Grid container spacing={3}>
 
-        <UploadMaterial
-          courseId={id}
-        />
+          <Grid size={{ xs: 12, md: 8 }}>
+            <VideoSection videos={videos} />
+            <UploadMaterial courseId={id} />
+          </Grid>
 
-        <VectorDatabase
-          courseId={id}
-        />
+          <Grid size={{ xs: 12, md: 4 }}>
+            <VectorDatabase courseId={id} />
+          </Grid>
+
+        </Grid>
 
       </Box>
-
     </Layout>
-
   );
-
 }
 
 export default CourseDetails;

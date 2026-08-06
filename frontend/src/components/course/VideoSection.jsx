@@ -4,16 +4,18 @@ import {
   List,
   ListItem,
   ListItemAvatar,
-  Avatar,
   ListItemText,
+  Avatar,
+  Chip,
   Divider,
   Button,
   Box,
 } from "@mui/material";
 
 import PlayCircleFilledIcon from "@mui/icons-material/PlayCircleFilled";
+import OndemandVideoIcon from "@mui/icons-material/OndemandVideo";
 
-function VideoSection({ videos = [] }) {
+function VideoSection({ videos }) {
   return (
     <Paper
       elevation={3}
@@ -23,22 +25,31 @@ function VideoSection({ videos = [] }) {
         mb: 4,
       }}
     >
-      <Typography
-        variant="h5"
-        fontWeight="bold"
+      <Box
+        display="flex"
+        justifyContent="space-between"
+        alignItems="center"
         mb={3}
       >
-        🎥 Course Videos
-      </Typography>
-
-      {videos.length === 0 ? (
-
-        <Typography color="text.secondary">
-          No videos available.
+        <Typography
+          variant="h5"
+          fontWeight="bold"
+        >
+          🎥 Course Videos
         </Typography>
 
-      ) : (
+        <Chip
+          icon={<OndemandVideoIcon />}
+          label={`${videos.length} Videos`}
+          color="primary"
+        />
+      </Box>
 
+      {videos.length === 0 ? (
+        <Typography color="text.secondary">
+          No videos available for this course.
+        </Typography>
+      ) : (
         <List>
 
           {videos.map((video, index) => (
@@ -60,7 +71,7 @@ function VideoSection({ videos = [] }) {
 
                   <Avatar
                     sx={{
-                      bgcolor: "#1976D2",
+                      bgcolor: "primary.main",
                     }}
                   >
                     <PlayCircleFilledIcon />
@@ -71,7 +82,8 @@ function VideoSection({ videos = [] }) {
                 <ListItemText
                   primary={video.title}
                   secondary={
-                    video.description
+                    video.description ||
+                    "Course Video"
                   }
                 />
 
@@ -86,9 +98,7 @@ function VideoSection({ videos = [] }) {
           ))}
 
         </List>
-
       )}
-
     </Paper>
   );
 }
