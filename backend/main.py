@@ -1236,7 +1236,7 @@ async def upload_course_video(
         "transcription": {
             "status": "completed"
         }
-    }    
+    }
 
 @app.get("/course-materials/{course_id}", response_model=list[CourseMaterialResponse])
 def get_course_materials(
@@ -1492,17 +1492,12 @@ Previous AI Answer:
     # ---------------------------------
     # Build Retrieval Query
     # ---------------------------------
-    # Include recent user questions so follow-up questions
-    # such as "What does it support?" can retrieve the
-    # correct course evidence for the previous topic.
-    recent_questions = [
-        chat.question
-        for chat in previous_chats[-3:]
-    ]
-
-    retrieval_query = "\n".join(
-        recent_questions + [request.question]
-    )
+    # Use only the current question for FAISS retrieval.
+    # Concatenating previous questions pollutes the embedding
+    # query and causes irrelevant chunks to rank higher.
+    # Chat memory is still passed to Gemini in the prompt
+    # so follow-up references ("it", "that", etc.) still work.
+    retrieval_query = request.question
 
     print("=== RETRIEVAL QUERY DEBUG ===")
     print(retrieval_query)
@@ -1515,6 +1510,80 @@ Previous AI Answer:
         request.course_id,
         retrieval_query
     )
+
+    # ---------------------------------
+    # Cheap keyword-overlap reranker
+    # ---------------------------------
+    # No extra API call. Tokenise the question and each chunk,
+    # count shared content words, keep the top-N most relevant.
+    # Video chunks are only kept when the question is clearly
+    # video-related; otherwise they are deprioritised so
+    # Gemini does not receive noisy transcript snippets for
+    # PDF/concept questions.
+    _STOP = {
+        "a", "an", "the", "is", "are", "was", "were", "be",
+        "been", "being", "have", "has", "had", "do", "does",
+        "did", "will", "would", "could", "should", "may",
+        "might", "shall", "can", "to", "of", "in", "on",
+        "at", "by", "for", "with", "about", "as", "into",
+        "through", "and", "or", "but", "if", "so", "yet",
+        "what", "how", "why", "when", "where", "which",
+        "who", "whom", "this", "that", "these", "those",
+        "it", "its", "i", "you", "he", "she", "we", "they",
+        "me", "him", "her", "us", "them", "my", "your",
+        "his", "our", "their", "not", "no", "from", "up",
+        "out", "than", "then", "just", "also", "more",
+    }
+
+    _VIDEO_KEYWORDS = {
+        "video", "watch", "lecture", "clip", "recording",
+        "timestamp", "minute", "second", "spoken", "said",
+        "explain", "explains", "mentioned", "talk", "talks",
+        "discussed", "shown", "demonstrate", "demonstrates",
+    }
+
+    def _tokens(text):
+        return {
+            w for w in text.lower().split()
+            if w.isalpha() and w not in _STOP
+        }
+
+    question_tokens = _tokens(request.question)
+    is_video_question = bool(
+        question_tokens & _VIDEO_KEYWORDS
+    )
+
+    def _score(doc):
+        chunk_tokens = _tokens(doc.page_content)
+        overlap = len(question_tokens & chunk_tokens)
+        is_video_chunk = (
+            doc.metadata.get("source") == "video"
+        )
+        # Penalise video chunks when the question is not
+        # video-related so they rank below PDF chunks.
+        if is_video_chunk and not is_video_question:
+            overlap = overlap * 0.3
+        return overlap
+
+    scored = sorted(
+        docs,
+        key=_score,
+        reverse=True
+    )
+
+    # Keep at most 5 chunks; always keep at least 1 so
+    # Gemini has something to work with even on sparse matches.
+    docs = scored[:5] if len(scored) >= 5 else scored
+
+    print("=== RERANKER DEBUG ===")
+    for i, doc in enumerate(docs):
+        print(
+            f"Rank {i+1} | "
+            f"source={doc.metadata.get('source')} | "
+            f"score={_score(doc):.2f} | "
+            f"{doc.page_content[:80]}"
+        )
+    print("=== END RERANKER DEBUG ===")
 
     print("=" * 60)
     print("Retrieved Chunks:", len(docs))
