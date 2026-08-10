@@ -909,12 +909,14 @@ async def upload_course_material(
 
         # ---------------------------------
         # Save Database Record
+        # Store only the filename so the record is not
+        # tied to an absolute path on this machine.
         # ---------------------------------
 
         material = CourseMaterial(
             course_id=course_id,
             file_name=file.filename,
-            file_path=file_path
+            file_path=file.filename
         )
 
         db.add(material)
@@ -1298,10 +1300,13 @@ def generate_vector_db(
 
         file_path = material.file_path
 
+        # Backward-compatible path resolution:
+        # - Old records: file_path is an absolute path → use as-is.
+        # - New records: file_path is a filename only → join with UPLOAD_DIR.
         if not os.path.isabs(file_path):
 
             file_path = os.path.join(
-                os.path.dirname(__file__),
+                UPLOAD_DIR,
                 file_path
             )
 
