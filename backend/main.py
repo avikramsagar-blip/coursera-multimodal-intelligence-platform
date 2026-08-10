@@ -155,7 +155,10 @@ def chat(request: ChatRequest):
         }
 
 @app.get("/users", response_model=list[UserResponse])
-def get_users(db: Session = Depends(get_db)):
+def get_users(
+    current_user: User = Depends(admin_required),
+    db: Session = Depends(get_db)
+):
     users = db.query(User).all()
     return users
 
@@ -979,14 +982,19 @@ def get_video_duration(file_path):
         return None
 def process_video_transcription(
     video_id,
-    file_path,
-    db
+    file_path
 ):
     print("========================================")
     print("=== BACKGROUND TRANSCRIPTION STARTED ===")
     print(f"Video ID: {video_id}")
     print(f"File: {file_path}")
     print("========================================")
+
+    # Create an independent session owned entirely by this
+    # background task. The request-scoped session is closed
+    # by FastAPI before this task runs, so we must not reuse it.
+    from database import SessionLocal
+    db = SessionLocal()
 
     try:
         transcription = transcribe_video(
@@ -1214,8 +1222,7 @@ async def upload_course_video(
     background_tasks.add_task(
         process_video_transcription,
         new_video.video_id,
-        file_path,
-        db
+        file_path
     )
 
     print(
