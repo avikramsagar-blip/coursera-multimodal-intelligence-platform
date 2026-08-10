@@ -1,11 +1,18 @@
 import whisper
 
+_model = None
 
-# Load Whisper model once when the server starts
-model = whisper.load_model("base")
+
+def _get_model():
+    global _model
+    if _model is None:
+        _model = whisper.load_model("base")
+    return _model
 
 
 def transcribe_video(video_path: str):
+
+    model = _get_model()
 
     result = model.transcribe(
         video_path,
