@@ -1,173 +1,207 @@
 import { useState } from "react";
+import { useParams } from "react-router-dom";
 
 import {
   Paper,
   Typography,
   Button,
-  Box,
   Alert,
+  List,
+  ListItem,
+  ListItemText,
+  Box,
   CircularProgress,
-  Stack,
 } from "@mui/material";
 
-import UploadFileIcon from "@mui/icons-material/UploadFile";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 
 import api from "../../api/api";
 
-function UploadMaterial({ courseId, onUploadSuccess }) {
-  const [file, setFile] = useState(null);
+function UploadMaterial({ onUploadSuccess }) {
+
+  const { id } = useParams();
+
+  const courseId = Number(id);
+
+  const [files, setFiles] = useState([]);
+
   const [loading, setLoading] = useState(false);
+
   const [message, setMessage] = useState("");
 
+  function handleChange(e) {
+    const selected = Array.from(e.target.files);
+    console.log("[handleChange] files selected:", selected.length, selected.map(f => f.name));
+    setFiles(selected);
+  }
+
   async function handleUpload() {
-    if (!file) {
-      setMessage("Please select a PDF file.");
+
+    if (files.length === 0) {
+      setMessage("Please select PDF files.");
       return;
     }
 
+    console.log("[handleUpload] files.length:", files.length, files.map(f => f.name));
+
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("course_id", courseId);
+    files.forEach((file) => formData.append("files", file));
+
+    console.log("[handleUpload] FormData entries:");
+    for (const [key, val] of formData.entries()) {
+      console.log(" ", key, val instanceof File ? val.name : val);
+    }
 
     try {
       setLoading(true);
       setMessage("");
 
-      await api.post(
-        `/upload-course-material?course_id=${courseId}`,
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-        }
-      );
+      await api.post("/upload-course-material", formData);
+      await api.post(`/generate-vector-db/${courseId}`);
 
-      setMessage("Material uploaded successfully.");
+      setMessage("Files uploaded and AI knowledge base updated successfully");
+      setFiles([]);
+      if (onUploadSuccess) onUploadSuccess();
 
-      if (onUploadSuccess) {
-        onUploadSuccess();
-      }
     } catch (error) {
-      console.log(error);
-      setMessage("Upload failed.");
+      setMessage(error.response?.data?.detail || "Upload failed.");
     } finally {
       setLoading(false);
     }
+
   }
 
   return (
+
     <Paper
       elevation={3}
       sx={{
-        p: 4,
-        borderRadius: 4,
-        mb: 4,
+        p: 3,
+        borderRadius: 3,
       }}
     >
+
       <Typography
-        variant="h5"
+        variant="h6"
         fontWeight="bold"
-        mb={3}
+        mb={2}
       >
-        📄 Upload Course Material
+
+        Upload Course Materials
+
       </Typography>
 
-      <Box
-        sx={{
-          border: "2px dashed #4F46E5",
-          borderRadius: 4,
-          p: 5,
-          textAlign: "center",
-          bgcolor: "#F8FAFC",
-        }}
+      <Button
+        component="label"
+        variant="outlined"
+        startIcon={<CloudUploadIcon />}
+        fullWidth
       >
-        <CloudUploadIcon
-          color="primary"
-          sx={{
-            fontSize: 70,
-            mb: 2,
-          }}
+
+        Select PDFs
+
+        <input
+          hidden
+          multiple
+          type="file"
+          accept=".pdf"
+          onChange={handleChange}
         />
 
-        <Typography
-          variant="h6"
-          mb={1}
-        >
-          Drag & Drop PDF Here
-        </Typography>
+      </Button>
 
-        <Typography
-          color="text.secondary"
-          mb={3}
-        >
-          or choose a file from your computer
-        </Typography>
+      {
 
-        <Button
-          component="label"
-          variant="outlined"
-          startIcon={<UploadFileIcon />}
-        >
-          Choose PDF
+        files.length > 0 && (
 
-          <input
-            hidden
-            type="file"
-            accept=".pdf"
-            onChange={(e) =>
-              setFile(e.target.files[0])
-            }
-          />
-        </Button>
+          <Box mt={3}>
 
-        {file && (
-          <Typography
-            mt={3}
-            color="primary"
-            fontWeight="bold"
-          >
-            {file.name}
-          </Typography>
-        )}
-      </Box>
+            <Typography
+              fontWeight="bold"
+              mb={1}
+            >
 
-      <Stack
-        direction="row"
-        justifyContent="flex-end"
-        mt={3}
+              Selected Files
+
+            </Typography>
+
+            <List>
+
+              {
+
+                files.map((file, index) => (
+
+                  <ListItem key={index}>
+
+                    <ListItemText
+                      primary={file.name}
+                    />
+
+                  </ListItem>
+
+                ))
+
+              }
+
+            </List>
+
+          </Box>
+
+        )
+
+      }
+
+      <Button
+        variant="contained"
+        fullWidth
+        sx={{ mt: 3 }}
+        disabled={loading}
+        onClick={handleUpload}
       >
-        <Button
-          variant="contained"
-          size="large"
-          disabled={loading}
-          onClick={handleUpload}
-        >
-          {loading ? (
-            <CircularProgress
-              size={24}
-              color="inherit"
-            />
-          ) : (
-            "Upload Material"
-          )}
-        </Button>
-      </Stack>
 
-      {message && (
-        <Alert
-          sx={{ mt: 3 }}
-          severity={
-            message.includes("success")
+        {
+
+          loading ?
+
+          <CircularProgress
+            size={22}
+            color="inherit"
+          />
+
+          :
+
+          "Upload Materials"
+
+        }
+
+      </Button>
+
+      {
+
+        message && (
+
+          <Alert
+            severity={
+              message.includes("success")
               ? "success"
               : "error"
-          }
-        >
-          {message}
-        </Alert>
-      )}
+            }
+            sx={{ mt: 3 }}
+          >
+
+            {message}
+
+          </Alert>
+
+        )
+
+      }
+
     </Paper>
+
   );
+
 }
 
 export default UploadMaterial;

@@ -14,4 +14,15 @@ __pycache__/
 # OS Files
 .DS_Store
 Thumbs.db
-node_modules
+
+# Node
+node_modules/
+
+# Runtime uploads
+backend/uploads/
+
+# FAISS generated indexes
+backend/faiss_indexes/
+
+# Archives
+*.zipgit status

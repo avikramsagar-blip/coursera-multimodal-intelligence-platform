@@ -1,36 +1,20 @@
 import os
+import shutil
 
 from dotenv import load_dotenv
 
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_community.vectorstores import FAISS
-
-load_dotenv()
-
-embeddings = GoogleGenerativeAIEmbeddings(
-    model="models/embedding-001",
-    google_api_key=os.getenv("GEMINI_API_KEY")
+from langchain_google_genai import (
+    GoogleGenerativeAIEmbeddings
 )
 
-
-def create_vector_store(chunks):
-
-    vector_db = FAISS.from_texts(
-        texts=chunks,
-        embedding=embeddings
-    )
-
-    vector_db.save_local("faiss_index")
-
-    return vector_db
-
-import os
-from dotenv import load_dotenv
-
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.vectorstores import FAISS
 
+
 load_dotenv()
+
+
+BASE_DIR = os.path.dirname(__file__)
+
 
 embeddings = GoogleGenerativeAIEmbeddings(
     model="gemini-embedding-001",
@@ -38,15 +22,47 @@ embeddings = GoogleGenerativeAIEmbeddings(
 )
 
 
-def create_vector_store(chunks, course_id):
+def create_vector_store(documents, course_id):
 
-    db = FAISS.from_texts(
-        texts=chunks,
-        embedding=embeddings
+    folder = os.path.join(
+        BASE_DIR,
+        "faiss_indexes",
+        f"course_{course_id}"
     )
 
-    folder = f"faiss_indexes/course_{course_id}"
+    if os.path.exists(folder):
+        shutil.rmtree(folder)
+
+    os.makedirs(
+        folder,
+        exist_ok=True
+    )
+
+    db = FAISS.from_documents(
+        documents=documents,
+        embedding=embeddings
+    )
 
     db.save_local(folder)
 
     return folder
+
+
+def load_vector_store(course_id):
+
+    folder = os.path.join(
+        BASE_DIR,
+        "faiss_indexes",
+        f"course_{course_id}"
+    )
+
+    if not os.path.exists(folder):
+        return None
+
+    db = FAISS.load_local(
+        folder,
+        embeddings,
+        allow_dangerous_deserialization=True
+    )
+
+    return db

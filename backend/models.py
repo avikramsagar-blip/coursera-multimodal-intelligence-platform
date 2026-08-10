@@ -1,8 +1,8 @@
-from sqlalchemy import Column, Integer, String, Text, BigInteger, ForeignKey, TIMESTAMP,DateTime,Float,Boolean
+from sqlalchemy import Column, Integer, String, Text, BigInteger, ForeignKey, TIMESTAMP, DateTime, Float, Boolean
 from sqlalchemy.sql import func
 from datetime import datetime
 from database import Base
-
+import yt_dlp
 
 class User(Base):
     __tablename__ = "users"
@@ -26,6 +26,7 @@ class Course(Base):
     thumbnail = Column(String, nullable=True)
     instructor_id = Column(Integer, ForeignKey("users.user_id"))
     created_at = Column(DateTime, default=datetime.utcnow)
+
 class Enrollment(Base):
     __tablename__ = "enrollments"
 
@@ -63,6 +64,66 @@ class CourseVideo(Base):
     duration = Column(Integer)
     order_no = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class VideoTranscript(Base):
+    __tablename__ = "video_transcripts"
+
+    transcript_id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
+
+    video_id = Column(
+        Integer,
+        ForeignKey("course_videos.video_id"),
+        nullable=False
+    )
+
+    full_text = Column(
+        Text,
+        nullable=False
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
+
+class VideoTranscriptSegment(Base):
+    __tablename__ = "video_transcript_segments"
+
+    segment_id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
+
+    video_id = Column(
+        Integer,
+        ForeignKey("course_videos.video_id"),
+        nullable=False
+    )
+
+    start_time = Column(
+        Float,
+        nullable=False
+    )
+
+    end_time = Column(
+        Float,
+        nullable=False
+    )
+
+    text = Column(
+        Text,
+        nullable=False
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
 
 class AIModel(Base):
     __tablename__ = "ai_models"
@@ -121,6 +182,7 @@ class CourseChatHistory(Base):
         DateTime,
         default=datetime.utcnow
     )
+
 class CourseMaterial(Base):
     __tablename__ = "course_materials"
 

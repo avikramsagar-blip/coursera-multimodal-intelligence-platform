@@ -36,7 +36,7 @@ function Sidebar() {
     {
       text: "AI Tutor",
       icon: <SmartToyIcon />,
-      path: "/dashboard",
+      path: "/ai-tutor",
     },
     {
       text: "Profile",
@@ -68,7 +68,6 @@ function Sidebar() {
       }}
     >
       <Box>
-
         <Typography
           variant="subtitle1"
           fontWeight="bold"
@@ -82,9 +81,7 @@ function Sidebar() {
         </Typography>
 
         <List>
-
           {menuItems.map((item) => (
-
             <ListItem
               disablePadding
               key={item.text}
@@ -136,15 +133,10 @@ function Sidebar() {
                     fontSize: 15,
                   }}
                 />
-
               </ListItemButton>
-
             </ListItem>
-
           ))}
-
         </List>
-
       </Box>
     </Drawer>
   );

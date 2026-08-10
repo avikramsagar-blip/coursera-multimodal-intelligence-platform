@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-
+import Profile from "./pages/Profile";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import Login from "./pages/Login";
@@ -26,6 +26,14 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+  path="/ai-tutor"
+  element={
+    <ProtectedRoute>
+      <AITutor />
+    </ProtectedRoute>
+  }
+/>
 
         <Route
           path="/course/:id"
@@ -44,6 +52,14 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+  path="/profile"
+  element={
+    <ProtectedRoute>
+      <Profile />
+    </ProtectedRoute>
+  }
+/>
 
         <Route path="*" element={<NotFound />} />
 

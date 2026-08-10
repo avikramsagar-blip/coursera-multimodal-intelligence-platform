@@ -48,11 +48,16 @@ class UserResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
 class UserUpdate(BaseModel):
     full_name: str
     email: str
-    password: str
-    role: str
+    password: str | None = None
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+    
 class UserLogin(BaseModel):
     email: str
     password: str
