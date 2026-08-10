@@ -10,7 +10,7 @@ embeddings = GoogleGenerativeAIEmbeddings(
     model="gemini-embedding-001",
     google_api_key=os.getenv("GEMINI_API_KEY")
 )
-def search_chunks(course_id, question, k=5):
+def search_chunks(course_id, question, k=10):
 
     folder = os.path.join(
         BASE_DIR,

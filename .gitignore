@@ -25,4 +25,4 @@ backend/uploads/
 backend/faiss_indexes/
 
 # Archives
-*.zipgit status
+*.zip
