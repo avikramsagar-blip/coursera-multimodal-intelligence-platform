@@ -154,6 +154,41 @@ def chat(request: ChatRequest):
             "error": str(e)
         }
 
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+
+    token = credentials.credentials
+
+    email = verify_access_token(token)
+
+    user = db.query(User).filter(
+        User.email == email
+    ).first()
+
+    if user is None:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    return user
+
+
+def admin_required(
+    current_user: User = Depends(get_current_user)
+):
+
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Only admin can access this resource"
+        )
+
+    return current_user
+
+
 @app.get("/users", response_model=list[UserResponse])
 def get_users(
     current_user: User = Depends(admin_required),
@@ -292,27 +327,6 @@ def login(
         "token_type": "bearer"
     }
 
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
-):
-
-    token = credentials.credentials
-
-    email = verify_access_token(token)
-
-    user = db.query(User).filter(
-        User.email == email
-    ).first()
-
-    if user is None:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found"
-        )
-
-    return user
-
 @app.put("/change-password")
 def change_password(
     password_data: PasswordChange,
@@ -352,19 +366,6 @@ def change_password(
     return {
         "message": "Password changed successfully"
     }
-
-
-def admin_required(
-    current_user: User = Depends(get_current_user)
-):
-
-    if current_user.role != "admin":
-        raise HTTPException(
-            status_code=403,
-            detail="Only admin can access this resource"
-        )
-
-    return current_user
 
 
 @app.get("/profile")
