@@ -35,21 +35,12 @@ def create_access_token(data: dict):
 
 def verify_access_token(token: str):
     try:
-        print("=== JWT DEBUG ===")
-        print(f"SECRET_KEY loaded: {bool(SECRET_KEY)}")
-        print(f"Token received: {repr(token[:30])}...")
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        print(f"Decoded payload: {payload}")
         email = payload.get("sub")
-        print(f"Email from payload: {email}")
         if email is None:
             raise HTTPException(status_code=401, detail="Invalid token")
-        print("=== JWT DEBUG END ===")
         return email
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"JWT Exception type: {type(e).__name__}")
-        print(f"JWT Exception message: {str(e)}")
-        print("=== JWT DEBUG END ===")
+    except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")

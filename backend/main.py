@@ -298,10 +298,6 @@ def get_current_user(
 ):
 
     token = credentials.credentials
-    print(f"=== AUTH HEADER DEBUG ===")
-    print(f"Scheme: {credentials.scheme}")
-    print(f"Token (first 30): {repr(token[:30])}...")
-    print(f"=== AUTH HEADER DEBUG END ===")
 
     email = verify_access_token(token)
 
@@ -1545,7 +1541,7 @@ Previous AI Answer:
     _VIDEO_KEYWORDS = {
         "video", "watch", "lecture", "clip", "recording",
         "timestamp", "minute", "second", "spoken", "said",
-        "explain", "explains", "mentioned", "talk", "talks",
+        "mentioned", "talk", "talks",
         "discussed", "shown", "demonstrate", "demonstrates",
     }
 
