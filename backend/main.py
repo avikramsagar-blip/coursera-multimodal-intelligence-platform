@@ -4,6 +4,8 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 from google import genai
 import os
+import cloudinary
+import cloudinary.uploader
 import whisper
 import yt_dlp
 import uuid
@@ -71,6 +73,18 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 api_key = os.getenv("GEMINI_API_KEY")
 
 client = genai.Client(api_key=api_key)
+
+
+# -----------------------------
+# Cloudinary Configuration
+# -----------------------------
+
+cloudinary.config(
+    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+    api_key=os.getenv("CLOUDINARY_API_KEY"),
+    api_secret=os.getenv("CLOUDINARY_API_SECRET"),
+    secure=True
+)
 
 # -----------------------------
 # FastAPI App
@@ -901,6 +915,7 @@ async def upload_course_material(
 
             buffer.write(content)
 
+
         print(
             f"File exists: "
             f"{os.path.exists(file_path)}"
@@ -1156,6 +1171,23 @@ async def upload_course_video(
     with open(file_path, "wb") as buffer:
         buffer.write(content)
 
+    # ---------------------------------
+    # Upload Video to Cloudinary
+    # ---------------------------------
+
+    print("=== CLOUDINARY VIDEO UPLOAD ===")
+
+    cloudinary_result = cloudinary.uploader.upload(
+        file_path,
+        resource_type="video",
+        folder="coursera/course_videos"
+    )
+
+    video_url = cloudinary_result["secure_url"]
+
+    print(f"Cloudinary URL: {video_url}")
+    print("=== END CLOUDINARY VIDEO UPLOAD ===")
+
     print(
         f"File exists: "
         f"{os.path.exists(file_path)}"
@@ -1185,13 +1217,7 @@ async def upload_course_video(
 
     print("=== END VIDEO DURATION DETECTION ===")
 
-    # ---------------------------------
-    # Create Video URL
-    # ---------------------------------
-
-    video_url = (
-        f"/uploads/videos/{unique_name}"
-    )
+    
 
     # ---------------------------------
     # Save Video Database Record
@@ -2155,3 +2181,6 @@ def transcribe_youtube_video(
                     os.remove(file_path)
                 except Exception:
                     pass
+
+
+
