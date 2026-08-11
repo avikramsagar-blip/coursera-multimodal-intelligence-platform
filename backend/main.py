@@ -1257,6 +1257,42 @@ def get_course_materials(
     return db.query(CourseMaterial).filter(
         CourseMaterial.course_id == course_id
     ).all()
+@app.delete("/course-material/{material_id}")
+def delete_course_material(
+    material_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    material = db.query(CourseMaterial).filter(
+        CourseMaterial.material_id == material_id
+    ).first()
+
+    if not material:
+        raise HTTPException(
+            status_code=404,
+            detail="Course material not found"
+        )
+
+    # Delete physical PDF
+    file_path = os.path.join(
+        UPLOAD_DIR,
+        material.file_path
+    )
+
+    if os.path.exists(file_path):
+        os.remove(file_path)
+
+    # Delete database record
+    db.delete(material)
+    db.commit()
+
+    return {
+        "message": "Course material deleted successfully"
+    }
+
+
+
+    
 
 @app.post("/generate-vector-db/{course_id}")
 def generate_vector_db(
