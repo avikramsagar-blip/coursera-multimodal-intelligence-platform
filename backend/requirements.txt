@@ -58,3 +58,5 @@ langchain-text-splitters==1.1.2
 langchain-google-genai==4.3.3
 PyPDF2==3.0.1
 faiss-cpu
+
+cloudinary==1.45.0
