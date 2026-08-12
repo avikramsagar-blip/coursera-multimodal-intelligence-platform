@@ -202,3 +202,34 @@ class CourseMaterial(Base):
         DateTime,
         default=datetime.utcnow
     )
+
+class CourseAudio(Base):
+    __tablename__ = "course_audios"
+
+    audio_id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(
+        Integer,
+        ForeignKey("courses.course_id"),
+        nullable=False
+    )
+    title = Column(String, nullable=False)
+    description = Column(Text)
+    audio_url = Column(String, nullable=False)
+    duration = Column(Integer)
+    order_no = Column(Integer)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class CourseImage(Base):
+    __tablename__ = "course_images"
+
+    image_id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(
+        Integer,
+        ForeignKey("courses.course_id"),
+        nullable=False
+    )
+    title = Column(String, nullable=False)
+    description = Column(Text)
+    image_url = Column(String, nullable=False)
+    order_no = Column(Integer)
+    created_at = Column(DateTime, default=datetime.utcnow)

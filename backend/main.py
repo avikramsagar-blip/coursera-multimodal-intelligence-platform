@@ -27,7 +27,7 @@ from typing import List
 from models import CourseMaterial
 from schemas import CourseMaterialResponse
 from video_transcription import transcribe_video
-from models import User, Course, Enrollment, CourseVideo,CourseMaterial,VideoTranscript,VideoTranscriptSegment
+from models import User, Course, Enrollment, CourseVideo,CourseMaterial,CourseAudio,CourseImage,VideoTranscript,VideoTranscriptSegment
 from schemas import VideoCreate, VideoResponse
 
 from text_splitter import split_text
@@ -113,6 +113,7 @@ app.add_middleware(
     allow_origins=[
     "http://localhost:5173",
     "http://localhost:5174",
+    "https://coursera-multimodal-intelligence-platform-6wvy.onrender.com",
 ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -1955,6 +1956,227 @@ CURRENT QUESTION:
     }
 
 
+@app.post("/upload-course-audio")
+async def upload_course_audio(
+    course_id: int = Form(...),
+    title: str = Form(...),
+    description: str | None = Form(None),
+    order_no: int = Form(0),
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    course = db.query(Course).filter(
+        Course.course_id == course_id
+    ).first()
+
+    if not course:
+        raise HTTPException(
+            status_code=404,
+            detail="Course not found"
+        )
+
+    if not file.filename:
+        raise HTTPException(
+            status_code=400,
+            detail="Audio file is required"
+        )
+
+    allowed_extensions = (
+        ".mp3",
+        ".wav",
+        ".ogg",
+        ".m4a",
+        ".aac"
+    )
+
+    extension = os.path.splitext(
+        file.filename
+    )[1].lower()
+
+    if extension not in allowed_extensions:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Invalid audio format. "
+                "Allowed formats: MP3, WAV, OGG, M4A, AAC"
+            )
+        )
+
+    audio_upload_dir = os.path.join(
+        os.path.dirname(__file__),
+        "uploads",
+        "audio"
+    )
+
+    os.makedirs(
+        audio_upload_dir,
+        exist_ok=True
+    )
+
+    unique_name = (
+        f"{uuid.uuid4().hex}"
+        f"{extension}"
+    )
+
+    file_path = os.path.join(
+        audio_upload_dir,
+        unique_name
+    )
+
+    content = await file.read()
+
+    if not content:
+        raise HTTPException(
+            status_code=400,
+            detail="Audio file is empty."
+        )
+
+    with open(file_path, "wb") as buffer:
+        buffer.write(content)
+
+    print("=== CLOUDINARY AUDIO UPLOAD ===")
+
+    cloudinary_result = cloudinary.uploader.upload(
+        file_path,
+        resource_type="video",
+        folder="coursera/course_audios"
+    )
+
+    audio_url = cloudinary_result["secure_url"]
+
+    print(f"Cloudinary Audio URL: {audio_url}")
+    print("=== END CLOUDINARY AUDIO UPLOAD ===")
+
+    duration = get_video_duration(file_path)
+
+    new_audio = CourseAudio(
+        course_id=course_id,
+        title=title,
+        description=description,
+        audio_url=audio_url,
+        duration=duration,
+        order_no=order_no
+    )
+
+    db.add(new_audio)
+    db.commit()
+    db.refresh(new_audio)
+
+    return {
+        "message": "Audio uploaded successfully",
+        "audio": new_audio
+    }
+
+@app.post("/upload-course-image")
+async def upload_course_image(
+    course_id: int = Form(...),
+    title: str = Form(...),
+    description: str | None = Form(None),
+    order_no: int = Form(0),
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    course = db.query(Course).filter(
+        Course.course_id == course_id
+    ).first()
+
+    if not course:
+        raise HTTPException(
+            status_code=404,
+            detail="Course not found"
+        )
+
+    if not file.filename:
+        raise HTTPException(
+            status_code=400,
+            detail="Image file is required"
+        )
+
+    allowed_extensions = (
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp",
+        ".gif"
+    )
+
+    extension = os.path.splitext(
+        file.filename
+    )[1].lower()
+
+    if extension not in allowed_extensions:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Invalid image format. "
+                "Allowed formats: JPG, JPEG, PNG, WEBP, GIF"
+            )
+        )
+
+    image_upload_dir = os.path.join(
+        os.path.dirname(__file__),
+        "uploads",
+        "images"
+    )
+
+    os.makedirs(
+        image_upload_dir,
+        exist_ok=True
+    )
+
+    unique_name = (
+        f"{uuid.uuid4().hex}"
+        f"{extension}"
+    )
+
+    file_path = os.path.join(
+        image_upload_dir,
+        unique_name
+    )
+
+    content = await file.read()
+
+    if not content:
+        raise HTTPException(
+            status_code=400,
+            detail="Image file is empty."
+        )
+
+    with open(file_path, "wb") as buffer:
+        buffer.write(content)
+
+    print("=== CLOUDINARY IMAGE UPLOAD ===")
+
+    cloudinary_result = cloudinary.uploader.upload(
+        file_path,
+        resource_type="image",
+        folder="coursera/course_images"
+    )
+
+    image_url = cloudinary_result["secure_url"]
+
+    print(f"Cloudinary Image URL: {image_url}")
+    print("=== END CLOUDINARY IMAGE UPLOAD ===")
+
+    new_image = CourseImage(
+        course_id=course_id,
+        title=title,
+        description=description,
+        image_url=image_url,
+        order_no=order_no
+    )
+
+    db.add(new_image)
+    db.commit()
+    db.refresh(new_image)
+
+    return {
+        "message": "Image uploaded successfully",
+        "image": new_image
+    }
+
 @app.post("/transcribe-youtube-video/{video_id}")
 def transcribe_youtube_video(
     video_id: int,
@@ -2181,6 +2403,13 @@ def transcribe_youtube_video(
                     os.remove(file_path)
                 except Exception:
                     pass
+
+
+
+
+
+
+
 
 
 

@@ -357,7 +357,7 @@ return (
                     "http"
                   )
                     ? selectedVideo.video_url
-                    : `http://127.0.0.1:8000${selectedVideo.video_url}`
+                    : `${"https://coursera-multimodal-intelligence-platform-6wvy.onrender.com"}${selectedVideo.video_url}`
                 }
               >
                 Your browser does not
@@ -389,3 +389,5 @@ return (
 
 }
 export default VideoSection;
+
+

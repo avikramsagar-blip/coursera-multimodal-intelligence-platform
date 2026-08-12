@@ -23,6 +23,9 @@ import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 
 import Layout from "../components/Layout";
 import UploadMaterial from "../components/course/UploadMaterial";
+import UploadVideo from "../components/course/UploadVideo";
+import UploadAudio from "../components/course/UploadAudio";
+import UploadImage from "../components/course/UploadImage";
 import VideoSection from "../components/course/VideoSection";
 
 import api from "../api/api";
@@ -624,7 +627,16 @@ function CourseDetails() {
           />
 
 
-          {videos.length === 0 ? (
+          <UploadVideo
+        courseId={id}
+        onUploadSuccess={loadData}
+      />
+
+  <UploadAudio courseId={id} onUploadSuccess={loadData} />
+
+  <UploadImage courseId={id} onUploadSuccess={loadData} />
+
+      {videos.length === 0 ? (
 
             <Typography
               color="text.secondary"
@@ -755,3 +767,10 @@ function CourseDetails() {
 
 
 export default CourseDetails;
+
+
+
+
+
+
+
