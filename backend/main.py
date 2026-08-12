@@ -114,6 +114,7 @@ app.add_middleware(
     "http://localhost:5173",
     "http://localhost:5174",
     "https://coursera-multimodal-intelligence-platform-6wvy.onrender.com",
+    "https://coursera-multimodal-intelligence.onrender.com",
 ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -2429,6 +2430,11 @@ def transcribe_youtube_video(
                     os.remove(file_path)
                 except Exception:
                     pass
+
+
+
+
+
 
 
 
