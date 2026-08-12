@@ -285,7 +285,7 @@ function UploadAudio({
           >
             {file
               ? file.name
-              : "Select Video File"}
+              : "Select Audio File"}
 
             <input
               id="audio-file-input"
@@ -326,7 +326,7 @@ function UploadAudio({
           >
             {loading
               ? "Uploading..."
-              : "Upload Video"}
+              : "Upload Audio"}
           </Button>
 
         </Stack>

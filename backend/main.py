@@ -639,6 +639,32 @@ def create_video(
     return new_video
 
 
+@app.get("/audios/{course_id}")
+def get_audios(
+    course_id: int,
+    db: Session = Depends(get_db)
+):
+    audios = db.query(CourseAudio).filter(
+        CourseAudio.course_id == course_id
+    ).order_by(
+        CourseAudio.order_no
+    ).all()
+
+    return audios
+
+@app.get("/images/{course_id}")
+def get_images(
+    course_id: int,
+    db: Session = Depends(get_db)
+):
+    images = db.query(CourseImage).filter(
+        CourseImage.course_id == course_id
+    ).order_by(
+        CourseImage.order_no
+    ).all()
+
+    return images
+
 @app.get("/videos/{course_id}", response_model=list[VideoResponse])
 def get_videos(
     course_id: int,
@@ -2403,6 +2429,10 @@ def transcribe_youtube_video(
                     os.remove(file_path)
                 except Exception:
                     pass
+
+
+
+
 
 
 

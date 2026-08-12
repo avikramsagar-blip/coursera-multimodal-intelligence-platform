@@ -285,7 +285,7 @@ function UploadImage({
           >
             {file
               ? file.name
-              : "Select Video File"}
+              : "Select image"}
 
             <input
               id="image-file-input"
@@ -326,7 +326,7 @@ function UploadImage({
           >
             {loading
               ? "Uploading..."
-              : "Upload Video"}
+              : "Upload Image"}
           </Button>
 
         </Stack>
