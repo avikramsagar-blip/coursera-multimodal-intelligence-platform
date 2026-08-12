@@ -665,6 +665,41 @@ def get_images(
     ).all()
 
     return images
+def delete_course_audio(
+    audio_id: int,
+    db: Session = Depends(get_db)
+):
+    audio = db.query(CourseAudio).filter(
+        CourseAudio.audio_id == audio_id
+    ).first()
+
+    if not audio:
+        raise HTTPException(
+            status_code=404,
+            detail="Audio not found."
+        )
+
+@app.delete("/course-image/{image_id}")
+def delete_course_image(
+    image_id: int,
+    db: Session = Depends(get_db)
+):
+    image = db.query(CourseImage).filter(
+        CourseImage.image_id == image_id
+    ).first()
+
+    if not image:
+        raise HTTPException(
+            status_code=404,
+            detail="Image not found."
+        )
+
+    db.delete(image)
+    db.commit()
+
+    return {
+        "message": "Course image deleted successfully."
+    }
 
 @app.get("/videos/{course_id}", response_model=list[VideoResponse])
 def get_videos(
