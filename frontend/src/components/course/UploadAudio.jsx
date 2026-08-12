@@ -219,7 +219,7 @@ function UploadAudio({
           variant="h6"
           fontWeight="bold"
         >
-          Upload Course Video
+          Upload Course Audio
         </Typography>
       </Stack>
 
@@ -336,3 +336,4 @@ function UploadAudio({
 }
 
 export default UploadAudio;
+

@@ -219,7 +219,7 @@ function UploadImage({
           variant="h6"
           fontWeight="bold"
         >
-          Upload Course Video
+          Upload Course Image
         </Typography>
       </Stack>
 
@@ -336,4 +336,5 @@ function UploadImage({
 }
 
 export default UploadImage;
+
 
