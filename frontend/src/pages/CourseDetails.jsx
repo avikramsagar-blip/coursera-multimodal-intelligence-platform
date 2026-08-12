@@ -155,6 +155,78 @@ function CourseDetails() {
   }
 
   // ---------------------------------
+  // Delete Audio
+  // ---------------------------------
+
+  async function deleteAudio(audioId) {
+    const ok = window.confirm(
+      "Delete this audio?"
+    );
+
+    if (!ok) return;
+
+    try {
+      setError("");
+      setSuccess("");
+
+      await api.delete(
+        `/course-audio/${audioId}`
+      );
+
+      await loadData();
+
+      setSuccess(
+        "Course audio deleted successfully."
+      );
+
+    } catch (error) {
+      console.log(error);
+
+      setError(
+        error.response?.data?.detail ||
+          "Failed to delete audio."
+      );
+    }
+  }
+
+
+  // ---------------------------------
+  // Delete Image
+  // ---------------------------------
+
+  async function deleteImage(imageId) {
+    const ok = window.confirm(
+      "Delete this image?"
+    );
+
+    if (!ok) return;
+
+    try {
+      setError("");
+      setSuccess("");
+
+      await api.delete(
+        `/course-image/${imageId}`
+      );
+
+      await loadData();
+
+      setSuccess(
+        "Course image deleted successfully."
+      );
+
+    } catch (error) {
+      console.log(error);
+
+      setError(
+        error.response?.data?.detail ||
+          "Failed to delete image."
+      );
+    }
+  }
+
+
+  // ---------------------------------
   // Generate Vector DB
   // ---------------------------------
 
@@ -592,6 +664,18 @@ function CourseDetails() {
                     Your browser does not support
                     the audio element.
                   </audio>
+
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    size="small"
+                    sx={{ mt: 1 }}
+                    onClick={() =>
+                      deleteAudio(audio.audio_id)
+                    }
+                  >
+                    Delete
+                  </Button>
                 </Paper>
               ))}
             </Stack>
@@ -660,6 +744,18 @@ function CourseDetails() {
                       borderRadius: 2,
                     }}
                   />
+
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    size="small"
+                    sx={{ mt: 1 }}
+                    onClick={() =>
+                      deleteImage(image.image_id)
+                    }
+                  >
+                    Delete
+                  </Button>
                 </Paper>
               ))}
             </Stack>
