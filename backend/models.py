@@ -242,7 +242,7 @@ class RetrievalRecord(Base):
     query = Column(Text, nullable=False)
     user_id = Column(Integer, ForeignKey("users.user_id"), nullable=True)
     retriever = Column(String, nullable=True)
-    metadata = Column(Text, nullable=True)  # JSON-serialized metadata
+    metadata_json = Column(Text, nullable=True)  # JSON-serialized metadata (renamed to avoid Declarative.metadata conflict)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -258,7 +258,7 @@ class Evidence(Base):
     snippet_text = Column(Text, nullable=True)
     source_uri = Column(Text, nullable=True)
     embedding_id = Column(String, nullable=True)
-    metadata = Column(Text, nullable=True)  # JSON-serialized metadata
+    metadata_json = Column(Text, nullable=True)  # JSON-serialized metadata (renamed to avoid Declarative.metadata conflict)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
