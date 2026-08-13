@@ -16,6 +16,8 @@ from vector_store import create_vector_store
 from sqlalchemy.orm import Session
 from models import CourseChatHistory
 from fastapi.middleware.cors import CORSMiddleware
+import time
+from metrics_utils import record_generation_metric
 from schemas import (
     CourseChatRequest,
     CourseChatResponse
@@ -98,6 +100,13 @@ try:
 except Exception as _e:
     # If evidence_api cannot be imported (e.g., during initial setup), log and continue
     print(f"evidence_api import failed: {_e}")
+
+# Include metrics API
+try:
+    from metrics_api import router as metrics_router
+    app.include_router(metrics_router, prefix="/api")
+except Exception as _e:
+    print(f"metrics_api import failed: {_e}")
 UPLOAD_DIR = os.path.join(
     os.path.dirname(__file__),
     "uploads"
@@ -165,10 +174,23 @@ def chat(request: ChatRequest):
 
     try:
 
+        start_ts = time.time()
         response = client.models.generate_content(
             model="gemini-3.6-flash",
             contents=request.message
         )
+        latency_ms = (time.time() - start_ts) * 1000.0
+
+        # Record metric (best-effort)
+        try:
+            record_generation_metric(
+                model_name="gemini-3.6-flash",
+                prompt_snippet=(request.message[:1000] if hasattr(request, 'message') else None),
+                latency_ms=latency_ms,
+                success=True
+            )
+        except Exception:
+            pass
 
         return {
             "reply": response.text
@@ -177,6 +199,19 @@ def chat(request: ChatRequest):
     except Exception as e:
 
         # amazonq-ignore-next-line
+        err = str(e)
+        # Record failure metric
+        try:
+            record_generation_metric(
+                model_name="gemini-3.6-flash",
+                prompt_snippet=(request.message[:1000] if hasattr(request, 'message') else None),
+                latency_ms=None,
+                success=False,
+                error=err
+            )
+        except Exception:
+            pass
+
         return {
             "error": str(e)
         }
@@ -852,25 +887,53 @@ def course_chat(
             detail="Course not found"
         )
 
-    response = client.models.generate_content(
-        model="gemini-3.6-flash",
-        contents=request.question
-    )
+    start_ts = time.time()
+    try:
+        response = client.models.generate_content(
+            model="gemini-3.6-flash",
+            contents=request.question
+        )
+        latency_ms = (time.time() - start_ts) * 1000.0
 
-    answer = response.text
+        # best-effort metric record
+        try:
+            record_generation_metric(
+                model_name="gemini-3.6-flash",
+                prompt_snippet=(request.question[:1000] if hasattr(request, 'question') else None),
+                latency_ms=latency_ms,
+                success=True
+            )
+        except Exception:
+            pass
 
-    chat = CourseChatHistory(
-        user_id=current_user.user_id,
-        course_id=request.course_id,
-        question=request.question,
-        answer=answer
-    )
+        answer = response.text
 
-    db.add(chat)
-    db.commit()
-    db.refresh(chat)
+        chat = CourseChatHistory(
+            user_id=current_user.user_id,
+            course_id=request.course_id,
+            question=request.question,
+            answer=answer
+        )
 
-    return chat
+        db.add(chat)
+        db.commit()
+        db.refresh(chat)
+
+        return chat
+
+    except Exception as e:
+        err = str(e)
+        try:
+            record_generation_metric(
+                model_name="gemini-3.6-flash",
+                prompt_snippet=(request.question[:1000] if hasattr(request, 'question') else None),
+                latency_ms=None,
+                success=False,
+                error=err
+            )
+        except Exception:
+            pass
+        raise
 
 
 @app.post("/upload-course-material")
@@ -1957,11 +2020,24 @@ CURRENT QUESTION:
     # Generate AI Response
     # ---------------------------------
 
+    start_ts = time.time()
     try:
         response = client.models.generate_content(
             model="gemini-3.6-flash",
             contents=prompt
         )
+        latency_ms = (time.time() - start_ts) * 1000.0
+
+        # record metric (best-effort)
+        try:
+            record_generation_metric(
+                model_name="gemini-3.6-flash",
+                prompt_snippet=(prompt[:1000] if prompt is not None else None),
+                latency_ms=latency_ms,
+                success=True
+            )
+        except Exception:
+            pass
 
     except Exception as e:
 
@@ -1970,6 +2046,17 @@ CURRENT QUESTION:
         print("=== GEMINI ERROR ===")
         print(error_message)
         print("=== END GEMINI ERROR ===")
+
+        try:
+            record_generation_metric(
+                model_name="gemini-3.6-flash",
+                prompt_snippet=(prompt[:1000] if prompt is not None else None),
+                latency_ms=None,
+                success=False,
+                error=error_message
+            )
+        except Exception:
+            pass
 
         if (
             "429" in error_message

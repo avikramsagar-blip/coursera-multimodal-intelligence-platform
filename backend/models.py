@@ -296,3 +296,20 @@ class Review(Base):
     action = Column(String, nullable=False)  # approved, rejected, request_changes
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class GenerationMetric(Base):
+    __tablename__ = "generation_metrics"
+
+    metric_id = Column(Integer, primary_key=True, index=True)
+    model_name = Column(String, nullable=False)
+    prompt_snippet = Column(String(1000), nullable=True)
+    prompt_hash = Column(String(128), nullable=True)
+    tokens_in = Column(Integer, nullable=True)
+    tokens_out = Column(Integer, nullable=True)
+    latency_ms = Column(Float, nullable=True)
+    success = Column(Boolean, default=True)
+    error = Column(Text, nullable=True)
+    retrieval_id = Column(Integer, ForeignKey("retrieval_records.retrieval_id"), nullable=True)
+    insight_id = Column(Integer, ForeignKey("insights.insight_id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
