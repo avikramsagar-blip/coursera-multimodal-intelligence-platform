@@ -74,7 +74,7 @@ def create_retrieval(payload: RetrievalIn, db: Session = Depends(get_db), curren
         query=payload.query,
         user_id=payload.user_id or current_user.user_id,
         retriever=payload.retriever,
-        metadata=str(payload.metadata) if payload.metadata is not None else None
+        metadata_json=str(payload.metadata) if payload.metadata is not None else None
     )
     db.add(rec)
     db.commit()
@@ -95,7 +95,7 @@ def create_evidence_bulk(items: List[EvidenceIn], db: Session = Depends(get_db),
             snippet_text=it.snippet_text,
             source_uri=it.source_uri,
             embedding_id=it.embedding_id,
-            metadata=str(it.metadata) if it.metadata is not None else None
+            metadata_json=str(it.metadata) if it.metadata is not None else None
         )
         db.add(ev)
         db.flush()
@@ -128,7 +128,7 @@ def create_insight(payload: InsightCreate, db: Session = Depends(get_db), curren
             snippet_text=ev.snippet_text,
             source_uri=ev.source_uri,
             embedding_id=ev.embedding_id,
-            metadata=str(ev.metadata) if ev.metadata is not None else None
+            metadata_json=str(ev.metadata) if ev.metadata is not None else None
         )
         db.add(created_evidence)
         db.flush()
@@ -169,7 +169,7 @@ def get_insight_evidence(insight_id: int, db: Session = Depends(get_db), current
             "snippet_text": ev.snippet_text,
             "source_uri": ev.source_uri,
             "embedding_id": ev.embedding_id,
-            "metadata": ev.metadata,
+            "metadata": ev.metadata_json,
             "score": l.score,
             "retrieval_id": l.retrieval_id
         })
