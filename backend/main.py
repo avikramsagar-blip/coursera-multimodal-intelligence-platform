@@ -1744,7 +1744,7 @@ Previous AI Answer:
             query=retrieval_query,
             user_id=current_user.user_id,
             retriever="faiss_rerank",
-            metadata=str({"course_id": request.course_id})
+            metadata_json=str({"course_id": request.course_id})
         )
         db.add(retrieval_rec)
         db.flush()
