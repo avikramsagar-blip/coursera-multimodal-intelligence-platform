@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional
-from database import get_db
+from backend.database import get_db
 from sqlalchemy.orm import Session
-import models
-import security
+import backend.models as models
+import backend.security as security
 from datetime import datetime
 
 router = APIRouter()
@@ -44,7 +44,7 @@ def set_user_role(user_id: int, payload: RoleUpdate, db: Session = Depends(get_d
 
     # Audit role change
     try:
-        from audit_utils import record_audit
+        from backend.audit_utils import record_audit
         details = f"old_role={old_role};new_role={payload.role}"
         record_audit(actor_id=current_user.user_id, action_type="role_change", target_type="user", target_id=user.user_id, details=details)
     except Exception:
