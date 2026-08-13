@@ -1,9 +1,6 @@
 import os
 import hashlib
 import time
-from backend.database import SessionLocal
-import backend.models as models
-from sqlalchemy.exc import SQLAlchemyError
 
 REDACT_PROMPT = os.getenv("METRICS_REDACT_PROMPT", "true").lower() in ("1", "true", "yes")
 SANITIZE_PROMPT = os.getenv("METRICS_SANITIZE_PROMPT", "true").lower() in ("1", "true", "yes")
@@ -210,6 +207,15 @@ def record_generation_metric(
         except Exception:
             pass
 
+    # Lazy import of DB dependencies to keep the module importable in test-only environments
+    try:
+        from backend.database import SessionLocal
+        import backend.models as models
+        from sqlalchemy.exc import SQLAlchemyError
+    except Exception:
+        # If DB or SQLAlchemy isn't available (e.g., in lightweight test env), skip writing metrics
+        return None
+
     db = SessionLocal()
     try:
         m = models.GenerationMetric(
@@ -228,8 +234,14 @@ def record_generation_metric(
         db.commit()
         db.refresh(m)
         return m.metric_id
-    except SQLAlchemyError:
-        db.rollback()
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
         return None
     finally:
-        db.close()
+        try:
+            db.close()
+        except Exception:
+            pass
