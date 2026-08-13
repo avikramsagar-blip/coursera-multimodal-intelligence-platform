@@ -58,7 +58,7 @@ from backend.pdf_utils import extract_pdf_text
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from backend.security import  verify_access_token
 from backend.models import Course
-from backend.database import engine, Base, get_db
+from backend.database import engine, Base, get_db, SessionLocal
 
 Base.metadata.create_all(bind=engine)
 
@@ -193,6 +193,38 @@ def startup_checks():
         print("Gemini API Key: detected")
     else:
         print("Gemini API Key: NOT detected — RAG embedding/indexing may be disabled or limited")
+
+    # ---------------------------------
+    # Create demo user if missing
+    # ---------------------------------
+    try:
+        db = SessionLocal()
+        from backend.models import User
+        from backend.security import hash_password
+
+        demo_email = "test@test.com"
+        demo_password = "test123"
+
+        existing = db.query(User).filter(User.email == demo_email).first()
+        if existing:
+            print(f"Demo user already exists: {demo_email}")
+        else:
+            demo_user = User(
+                full_name="Demo User",
+                email=demo_email,
+                password=hash_password(demo_password),
+                role="student"
+            )
+            db.add(demo_user)
+            db.commit()
+            print(f"Demo user created: {demo_email}")
+    except Exception as _e:
+        print(f"Warning: failed to create demo user: {_e}")
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
 
     print("=== END STARTUP CHECKS ===")
 

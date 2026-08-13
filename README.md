@@ -170,3 +170,40 @@ Default backend base URL in frontend is `http://127.0.0.1:8000`.
 
 If you encounter any issues during setup, please share the backend terminal logs and browser console logs so the problem can be diagnosed quickly.
 
+After running:
+
+cd frontend
+npm run dev
+
+Open:
+
+http://localhost:5173
+
+## First Login
+
+1. Open http://127.0.0.1:8000/docs
+2. Use POST /register
+3. Create an account
+4. Use POST /login
+5. Copy the access token
+6. Click Authorize
+7. Paste:
+
+Bearer <token>
+
+## Verify Installation
+
+1. Start backend
+2. Start frontend
+3. Register a user
+4. Create a course
+5. Upload a PDF
+6. Generate Vector DB
+7. Ask a question
+
+## Demo Credentials
+
+A demo user is created automatically on backend startup (if not already present). Use these credentials to log in for evaluation or demos:
+
+Email: test@test.com
+Password: test123
