@@ -14,7 +14,11 @@ config = context.config
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
-fileConfig(config.config_file_name)
+try:
+    fileConfig(config.config_file_name)
+except Exception:
+    # tolerate missing logger sections in CI/dev alembic.ini
+    pass
 
 # add project path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
