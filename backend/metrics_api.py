@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional
 from sqlalchemy.orm import Session
-from database import get_db
-import models
+from backend.database import get_db
+import backend.models as models
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import security
+import backend.security as security
 
 router = APIRouter()
 security_scheme = HTTPBearer()
