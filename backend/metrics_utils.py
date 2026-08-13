@@ -1,8 +1,8 @@
 import os
 import hashlib
 import time
-from database import SessionLocal
-import models
+from backend.database import SessionLocal
+import backend.models as models
 from sqlalchemy.exc import SQLAlchemyError
 
 REDACT_PROMPT = os.getenv("METRICS_REDACT_PROMPT", "true").lower() in ("1", "true", "yes")
