@@ -20,13 +20,24 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
+
+# Role requirement factory: returns a dependency that enforces allowed roles
+def require_roles(allowed_roles: list):
+    def _require(current_user: models.User = Depends(get_current_user)):
+        user_role = (current_user.role or "").lower()
+        allowed = [r.lower() for r in allowed_roles]
+        if user_role not in allowed:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return current_user
+    return _require
+
 class MetricsQuery(BaseModel):
     model_name: Optional[str] = None
     since_hours: Optional[int] = 24
 
 
 @router.get("/metrics/generation")
-def get_generation_metrics(model_name: Optional[str] = None, since_hours: int = 24, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+def get_generation_metrics(model_name: Optional[str] = None, since_hours: int = 24, db: Session = Depends(get_db), current_user: models.User = Depends(require_roles(["ops", "admin", "reviewer"]))):
     since = datetime.utcnow() - timedelta(hours=since_hours)
     q = db.query(models.GenerationMetric).filter(models.GenerationMetric.created_at >= since)
     if model_name:
@@ -70,7 +81,7 @@ def get_generation_metrics(model_name: Optional[str] = None, since_hours: int = 
 
 # Optional: raw listing endpoint
 @router.get("/metrics/generation/raw")
-def get_generation_metrics_raw(limit: int = 100, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+def get_generation_metrics_raw(limit: int = 100, db: Session = Depends(get_db), current_user: models.User = Depends(require_roles(["ops", "admin", "reviewer"]))):
     rows = db.query(models.GenerationMetric).order_by(models.GenerationMetric.created_at.desc()).limit(limit).all()
     return [{
         "metric_id": r.metric_id,

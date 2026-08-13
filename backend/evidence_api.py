@@ -20,6 +20,18 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
+
+# Role requirement factory: returns a dependency that enforces allowed roles
+def require_roles(allowed_roles: list):
+    def _require(current_user: models.User = Depends(get_current_user)):
+        # Normalize role names and allowed roles
+        user_role = (current_user.role or "").lower()
+        allowed = [r.lower() for r in allowed_roles]
+        if user_role not in allowed:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return current_user
+    return _require
+
 # Pydantic schemas
 class EvidenceIn(BaseModel):
     source_type: str
@@ -186,7 +198,7 @@ def list_insights(status: Optional[str] = None, db: Session = Depends(get_db), c
 
 
 @router.post("/insights/{insight_id}/review")
-def review_insight(insight_id: int, payload: ReviewIn, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+def review_insight(insight_id: int, payload: ReviewIn, db: Session = Depends(get_db), current_user: models.User = Depends(require_roles(["reviewer", "admin", "ops"]))):
     insight = db.query(models.Insight).filter(models.Insight.insight_id == insight_id).first()
     if not insight:
         raise HTTPException(status_code=404, detail="Insight not found")
