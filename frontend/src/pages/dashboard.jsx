@@ -7,6 +7,7 @@ import {
   Grid,
   Paper,
   Divider,
+  Button,
 } from "@mui/material";
 
 import api from "../api/api";
@@ -24,6 +25,9 @@ function Dashboard() {
   const [courses, setCourses] = useState([]);
 
   const [search, setSearch] = useState("");
+
+  // Show create course button when logged in (token present)
+  const token = localStorage.getItem("token");
 
   useEffect(() => {
     fetchCourses();
@@ -62,6 +66,14 @@ function Dashboard() {
       >
 
         <DashboardHeader />
+
+        {token && (
+          <Box sx={{ mb: 2, textAlign: 'right' }}>
+            <Button variant="contained" onClick={() => navigate('/courses/new')}>
+              Create Course
+            </Button>
+          </Box>
+        )}
 
         <SearchBar
           value={search}

@@ -1,0 +1,11 @@
+﻿Add startup checks, health endpoint, env example, setup scripts, Create Course UI, and auth/vector-store fixes
+
+- Added .env.example and updated .env (sanitized placeholder values)
+- Added setup.bat and setup.sh for first-run setup
+- Added frontend CreateCourse page and route; Dashboard Create Course button
+- Fixed axios Authorization header to use "Bearer <token>"
+- Added backend startup_checks() and GET /health
+- Added friendly error when FAISS vector store missing
+- Updated README and .gitignore
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>

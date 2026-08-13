@@ -16,6 +16,7 @@ import yt_dlp
 import uuid
 import subprocess
 import json
+import traceback
 
 from backend.rag import search_chunks
 from backend.vector_store import create_vector_store
@@ -143,6 +144,57 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# -----------------------------
+# Startup Validation
+# -----------------------------
+@app.on_event("startup")
+def startup_checks():
+    import traceback
+    print("=== STARTUP CHECKS ===")
+    # Database connectivity
+    try:
+        # engine is imported earlier from backend.database
+        with engine.connect() as conn:
+            conn.execute("SELECT 1")
+        print("Database: connected")
+    except Exception as e:
+        print("Database: connection failed")
+        traceback.print_exc()
+
+    # Create tables (idempotent)
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("Database: tables created/verified")
+    except Exception as e:
+        print("Database: failed to create/verify tables")
+        traceback.print_exc()
+
+    # Ensure upload directory exists
+    try:
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+        print(f"Upload directory: {UPLOAD_DIR} (exists)")
+    except Exception as e:
+        print(f"Upload directory: failed to create {UPLOAD_DIR}")
+        traceback.print_exc()
+
+    # Ensure faiss_indexes directory exists
+    try:
+        faiss_root = os.path.join(os.path.dirname(__file__), "faiss_indexes")
+        os.makedirs(faiss_root, exist_ok=True)
+        print(f"FAISS directory: {faiss_root} (exists)")
+    except Exception as e:
+        print("FAISS directory: failed to create")
+        traceback.print_exc()
+
+    # Gemini API key presence
+    if os.getenv("GEMINI_API_KEY"):
+        print("Gemini API Key: detected")
+    else:
+        print("Gemini API Key: NOT detected — RAG embedding/indexing may be disabled or limited")
+
+    print("=== END STARTUP CHECKS ===")
+
 # -----------------------------
 # Request Model
 # -----------------------------
@@ -158,6 +210,46 @@ def home():
     return {
         "message": "Welcome to Multimodal Intelligence Platform"
     }
+
+
+@app.get('/health')
+def health():
+    """Health endpoint reporting database connection and RAG/vector-store status."""
+    status = {
+        "status": "healthy",
+        "database": "unknown",
+        "rag": "unknown"
+    }
+
+    # Database check
+    try:
+        with engine.connect() as conn:
+            conn.execute("SELECT 1")
+        status["database"] = "connected"
+    except Exception as e:
+        status["database"] = f"error: {str(e)}"
+        status["status"] = "unhealthy"
+
+    # RAG / FAISS check - check faiss_indexes directory existence
+    faiss_root = os.path.join(os.path.dirname(__file__), "faiss_indexes")
+    if os.path.exists(faiss_root):
+        # Determine if any course indexes exist
+        subdirs = [d for d in os.listdir(faiss_root) if os.path.isdir(os.path.join(faiss_root, d))]
+        if len(subdirs) > 0:
+            status["rag"] = "ready"
+        else:
+            status["rag"] = "no_indexes_found"
+            # not unhealthy; indexing may be pending
+    else:
+        status["rag"] = "faiss_directory_missing"
+
+    # Gemini API key presence
+    if os.getenv("GEMINI_API_KEY"):
+        status["gemini_api_key"] = "present"
+    else:
+        status["gemini_api_key"] = "missing"
+
+    return status
 
 
 # -----------------------------
@@ -967,161 +1059,174 @@ async def upload_course_material(
     db: Session = Depends(get_db)
 ):
 
-    # ---------------------------------
-    # Check Course
-    # ---------------------------------
-
-    course = db.query(Course).filter(
-        Course.course_id == course_id
-    ).first()
-
-    if not course:
-        raise HTTPException(
-            status_code=404,
-            detail="Course not found"
-        )
-
-    # ---------------------------------
-    # Create Upload Directory
-    # ---------------------------------
-
-    os.makedirs(
-        UPLOAD_DIR,
-        exist_ok=True
-    )
-
-    print("=== MULTI PDF UPLOAD DEBUG ===")
-    print(f"UPLOAD_DIR: {UPLOAD_DIR}")
-    print(
-        f"Number of files received: "
-        f"{len(files)}"
-    )
-
-    uploaded_files = []
-
-    # ---------------------------------
-    # Upload Each PDF
-    # ---------------------------------
-
-    for file in files:
-
-        if not file.filename:
-            continue
+    print("UPLOAD START")
+    print(f"course_id: {course_id}")
+    try:
+        print("files:", [f.filename for f in files])
+        print("current_user:", getattr(current_user, 'email', str(current_user)))
 
         # ---------------------------------
-        # Validate PDF
+        # Check Course
         # ---------------------------------
 
-        extension = os.path.splitext(
-            file.filename
-        )[1].lower()
+        course = db.query(Course).filter(
+            Course.course_id == course_id
+        ).first()
 
-        if extension != ".pdf":
+        if not course:
             raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"{file.filename} is not a PDF. "
-                    "Only PDF files are allowed."
-                )
+                status_code=404,
+                detail="Course not found"
             )
 
         # ---------------------------------
-        # Read File
+        # Create Upload Directory
         # ---------------------------------
 
-        content = await file.read()
-
-        print(
-            f"Filename: {file.filename}"
-        )
-
-        print(
-            f"Content length: "
-            f"{len(content)}"
-        )
-
-        if len(content) == 0:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"{file.filename} is empty."
-                )
-            )
-
-        # ---------------------------------
-        # Create File Path
-        # ---------------------------------
-
-        file_path = os.path.join(
+        os.makedirs(
             UPLOAD_DIR,
-            file.filename
+            exist_ok=True
+        )
+
+        print("=== MULTI PDF UPLOAD DEBUG ===")
+        print(f"UPLOAD_DIR: {UPLOAD_DIR}")
+        print(
+            f"Number of files received: "
+            f"{len(files)}"
+        )
+
+        uploaded_files = []
+
+        # ---------------------------------
+        # Upload Each PDF
+        # ---------------------------------
+
+        for file in files:
+
+            if not file.filename:
+                continue
+
+            # ---------------------------------
+            # Validate PDF
+            # ---------------------------------
+
+            extension = os.path.splitext(
+                file.filename
+            )[1].lower()
+
+            if extension != ".pdf":
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"{file.filename} is not a PDF. "
+                        "Only PDF files are allowed."
+                    )
+                )
+
+            # ---------------------------------
+            # Read File
+            # ---------------------------------
+
+            content = await file.read()
+
+            print(
+                f"Filename: {file.filename}"
+            )
+
+            print(
+                f"Content length: "
+                f"{len(content)}"
+            )
+
+            if len(content) == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"{file.filename} is empty."
+                    )
+                )
+
+            # ---------------------------------
+            # Create File Path
+            # ---------------------------------
+
+            file_path = os.path.join(
+                UPLOAD_DIR,
+                file.filename
+            )
+
+            print(
+                f"File path: {file_path}"
+            )
+
+            # ---------------------------------
+            # Save File
+            # ---------------------------------
+
+            with open(
+                file_path,
+                "wb"
+            ) as buffer:
+
+                buffer.write(content)
+
+
+            print(
+                f"File exists: "
+                f"{os.path.exists(file_path)}"
+            )
+
+            print(
+                f"File size: "
+                f"{os.path.getsize(file_path)}"
+            )
+
+            # ---------------------------------
+            # Save Database Record
+            # Store only the filename so the record is not
+            # tied to an absolute path on this machine.
+            # ---------------------------------
+
+            material = CourseMaterial(
+                course_id=course_id,
+                file_name=file.filename,
+                file_path=file.filename
+            )
+
+            db.add(material)
+
+            uploaded_files.append(
+                file.filename
+            )
+
+        # ---------------------------------
+        # Commit All Materials
+        # ---------------------------------
+
+        db.commit()
+
+        print(
+            f"Uploaded files: "
+            f"{uploaded_files}"
         )
 
         print(
-            f"File path: {file_path}"
+            "=== END MULTI PDF UPLOAD ==="
         )
 
-        # ---------------------------------
-        # Save File
-        # ---------------------------------
+        return {
+            "message": (
+                "Files uploaded successfully"
+            ),
+            "files": uploaded_files
+        }
 
-        with open(
-            file_path,
-            "wb"
-        ) as buffer:
-
-            buffer.write(content)
-
-
-        print(
-            f"File exists: "
-            f"{os.path.exists(file_path)}"
-        )
-
-        print(
-            f"File size: "
-            f"{os.path.getsize(file_path)}"
-        )
-
-        # ---------------------------------
-        # Save Database Record
-        # Store only the filename so the record is not
-        # tied to an absolute path on this machine.
-        # ---------------------------------
-
-        material = CourseMaterial(
-            course_id=course_id,
-            file_name=file.filename,
-            file_path=file.filename
-        )
-
-        db.add(material)
-
-        uploaded_files.append(
-            file.filename
-        )
-
-    # ---------------------------------
-    # Commit All Materials
-    # ---------------------------------
-
-    db.commit()
-
-    print(
-        f"Uploaded files: "
-        f"{uploaded_files}"
-    )
-
-    print(
-        "=== END MULTI PDF UPLOAD ==="
-    )
-
-    return {
-        "message": (
-            "Files uploaded successfully"
-        ),
-        "files": uploaded_files
-    }
+    except Exception as e:
+        # Print traceback for debugging
+        print("UPLOAD ERROR:")
+        traceback.print_exc()
+        # Return 500 with the error message
+        raise HTTPException(status_code=500, detail=str(e))
 def get_video_duration(file_path):
     try:
         result = subprocess.run(

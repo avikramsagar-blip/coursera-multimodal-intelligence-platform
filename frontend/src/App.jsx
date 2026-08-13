@@ -8,6 +8,7 @@ import Dashboard from "./pages/dashboard";
 import NotFound from "./pages/notfound";
 import CourseDetails from "./pages/CourseDetails";
 import AITutor from "./pages/AITutor";
+import CreateCourse from "./pages/CreateCourse";
 
 function App() {
   return (
@@ -49,6 +50,15 @@ function App() {
           element={
             <ProtectedRoute>
               <AITutor />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/courses/new"
+          element={
+            <ProtectedRoute>
+              <CreateCourse />
             </ProtectedRoute>
           }
         />

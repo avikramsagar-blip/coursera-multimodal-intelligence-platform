@@ -1,121 +1,172 @@
-# Coursera Multimodal Intelligence Platform
+﻿# Coursera Multimodal Intelligence Platform
 
-## Project Overview
+Overview
+--------
 
-The Coursera Multimodal Intelligence Platform is a full-stack AI-powered learning platform that allows users to access course content and interact with course material through an AI Tutor.
+A full-stack learning platform that supports course materials (PDF, video, audio, images) and an AI Tutor powered by Retrieval-Augmented Generation (RAG). This repository contains a FastAPI backend and a React + Vite frontend.
 
-The platform supports multiple types of course content, including PDF documents, videos, images, and audio. It uses Retrieval-Augmented Generation (RAG) to answer questions based on the uploaded course material.
+This README documents how to set up the project locally (Windows / macOS / Linux) so a new user can clone, install, and run the app.
 
-## Features
+Quick summary
+-------------
 
-- User registration and login
-- Course creation and enrollment
-- PDF course material upload
-- Video upload and playback
-- Image upload and display
-- Audio upload and playback
-- Delete uploaded images and audio
-- AI Tutor for course-related questions
-- Course-specific AI Knowledge Base
-- FAISS vector database for similarity search
-- Retrieved evidence with source information
-- Course-grounded AI responses
+- Backend: Python + FastAPI
+- Frontend: React + Vite
+- Vector DB: FAISS (local indexes)
+- Embeddings: Google Generative AI / Gemini (optional)
 
-## RAG Pipeline
+Prerequisites
+-------------
 
-The AI Tutor uses Retrieval-Augmented Generation:
+- Python 3.10+ installed and on PATH
+- Node.js 18+ and npm
+- Git
+- (Optional, for RAG/whisper) ffmpeg installed on system PATH for media processing
 
-User Question  
-↓  
-Query Embedding  
-↓  
-FAISS Vector Search  
-↓  
-Relevant Course Chunks  
-↓  
-Retrieved Context  
-↓  
-LLM  
-↓  
-Course-Grounded Answer
+Files added in this branch
+-------------------------
 
-The system retrieves relevant information from the selected course material before generating the response.
+- `.env.example` â€” sample environment variables
+- `setup.bat` â€” Windows first-time setup script
+- `setup.sh` â€” Unix (Linux/macOS) first-time setup script
+- `frontend/src/pages/CreateCourse.jsx` â€” Create Course UI
+- Updates to backend to provide `/health` endpoint and startup validation logs
+- Fixes to frontend axios Authorization header
 
-## Multimodal Content
+1. Create a virtual environment
+-------------------------------
 
-The platform supports:
+Windows (PowerShell):
 
-- PDF documents
-- Videos
-- Images
-- Audio
+```powershell
+python -m venv venv
+venv\Scripts\Activate.ps1
+```
 
-Uploaded course content can be accessed from the course details page.
+macOS / Linux:
 
-## AI Tutor
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
 
-The AI Tutor allows students to ask questions about their course material.
+Or run the provided setup script (recommended for first-time users):
 
-For example:
+Windows:
+```
+setup.bat
+```
 
-**Question:**
+macOS / Linux:
+```
+chmod +x setup.sh
+./setup.sh
+```
 
-What is Python?
+2. Environment variables
+------------------------
 
-The system retrieves relevant content from the Python course material and generates an answer using the retrieved evidence.
+Copy `.env.example` to `.env` and fill values.
 
-The response also displays the retrieved sources and chunks used to generate the answer.
+Minimal dev values (recommended):
 
-## Technology Stack
+```
+SECRET_KEY=dev-secret-key
+DATABASE_URL=sqlite:///./dev.db
+GEMINI_API_KEY=
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+```
 
-### Frontend
+Notes:
+- GEMINI_API_KEY is optional for development. If missing, vector indexing or embedding-based features will be limited. The startup logs will notify you if it is missing.
 
-- React
-- Vite
-- Material UI
-- Axios
-- React Router
+3. Installing dependencies
+--------------------------
 
-### Backend
+Backend (from repo root):
 
-- Python
-- FastAPI
-- SQLAlchemy
-- PostgreSQL
-- FAISS
+```bash
+# activate venv
+pip install -r backend/requirements.txt
+```
 
-### AI / RAG
+Frontend:
 
-- Embeddings
-- FAISS Vector Database
-- Retrieval-Augmented Generation (RAG)
-- Large Language Model
+```bash
+cd frontend
+npm install
+```
 
-### Media Storage
+4. Start backend and frontend
+----------------------------
 
-- Cloudinary
+Backend (from repo root):
 
-### Deployment
+```bash
+# activate venv
+python -m uvicorn backend.main:app --reload --port 8000
+```
 
-- GitHub
-- Render
+Frontend (from repo root):
 
-## Project Architecture
+```bash
+cd frontend
+npm run dev
+```
 
-```text
-                    React Frontend
-                          |
-                          | REST API
-                          ↓
-                    FastAPI Backend
-                          |
-             ┌────────────┼────────────┐
-             ↓            ↓            ↓
-         PostgreSQL   Cloudinary      RAG
-                                      |
-                                    FAISS
-                                      |
-                                     LLM
-                                      |
-                                      ↓
-                                AI Response
+Default backend base URL in frontend is `http://127.0.0.1:8000`.
+
+5. What to expect on first run
+------------------------------
+
+- On backend startup you will see startup validation logs in the terminal:
+  - Database connectivity check
+  - Tables created/verified
+  - Upload directory existence
+  - FAISS (vector store) directory existence
+  - Gemini API key presence (detected/missing)
+
+- Visit http://127.0.0.1:8000/docs for interactive Swagger UI. Use the Login endpoint to obtain a JWT and click Authorize to provide the token.
+
+- Health endpoint: GET http://127.0.0.1:8000/health â€” reports database and RAG/index status.
+
+6. Create Course (frontend)
+---------------------------
+
+- Log in (or register) in the frontend.
+- On the Dashboard (when logged in) you will see a "Create Course" button.
+- Click it to open the Create Course form; fill Title, Description, Category, Difficulty, Price and optional Thumbnail.
+- After creating, you will be redirected to the Course Details page where you can upload PDFs and other media.
+
+7. Upload PDFs and build vector store
+------------------------------------
+
+- Use the Course Details page to upload PDF materials.
+- After uploading, call the "Generate Vector DB" action (button or endpoint) to build the FAISS index for that course.
+- If the vector store is missing when querying, the API will return a clear 404 with a friendly message asking to generate the index.
+
+8. Debugging & common issues
+----------------------------
+
+- If you see "Gemini API Key: NOT detected" in startup logs, the embedding step will be disabled until you provide an API key.
+- If the frontend does not send authenticated requests, ensure the Authorization header is set in `localStorage.token`. The frontend code attaches `Authorization: Bearer <token>` automatically when a token is present.
+- If you see "no such table" errors after a fresh clone, ensure backend started successfully and startup logs show "Database: tables created/verified".
+
+9. Development notes
+--------------------
+
+- To run backend on a different port, set `BACKEND_PORT` in `.env` and update frontend baseURL in `frontend/src/api/api.js` if required.
+- The sample scripts `setup.bat` and `setup.sh` will install requirements and create required directories.
+
+10. Next improvements planned (not in this change)
+--------------------------------------------------
+
+- Demo seeding (disabled for now)
+- Docker/Docker Compose for reproducible deployment
+- Role-based access controls for admin/instructor features
+- More robust test coverage and CI integration
+
+If you encounter any issues during setup, please share the backend terminal logs and browser console logs so the problem can be diagnosed quickly.
+

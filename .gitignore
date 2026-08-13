@@ -26,3 +26,15 @@ backend/faiss_indexes/
 
 # Archives
 *.zip
+
+# Additional ignores
+frontend/node_modules/
+.venv/
+*.db
+dev.db
+faiss_indexes/
+backend/logs/
+backend/temp/
+package-lock.json
+npm-debug.log
+coverage/

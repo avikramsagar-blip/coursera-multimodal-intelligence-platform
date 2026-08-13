@@ -4,12 +4,14 @@ from langchain_google_genai import (
     GoogleGenerativeAIEmbeddings
 )
 from langchain_community.vectorstores import FAISS
+from fastapi import HTTPException
 load_dotenv()
 BASE_DIR = os.path.dirname(__file__)
 embeddings = GoogleGenerativeAIEmbeddings(
     model="gemini-embedding-001",
     google_api_key=os.getenv("GEMINI_API_KEY")
 )
+
 def search_chunks(course_id, question, k=10):
 
     folder = os.path.join(
@@ -19,9 +21,13 @@ def search_chunks(course_id, question, k=10):
     )
 
     if not os.path.exists(folder):
-
-        raise FileNotFoundError(
-            f"Vector database not found for course {course_id}"
+        # Graceful HTTP error to surface a user-friendly message
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Vector database not found for course {course_id}. "
+                "Run /generate-vector-db/{course_id} to create the index."
+            )
         )
 
     db = FAISS.load_local(

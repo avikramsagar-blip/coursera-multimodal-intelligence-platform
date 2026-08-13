@@ -57,15 +57,29 @@ function UploadMaterial({ onUploadSuccess }) {
       setLoading(true);
       setMessage("");
 
-      await api.post("/upload-course-material", formData);
-      await api.post(`/generate-vector-db/${courseId}`);
+      const uploadUrl = "/upload-course-material";
+      console.log("[handleUpload] request URL:", uploadUrl);
+      console.log("[handleUpload] FormData entries before send:");
+      for (const [key, val] of formData.entries()) {
+        console.log("   ", key, val instanceof File ? val.name : val);
+      }
+      console.log("[handleUpload] course_id:", courseId);
+
+      const uploadResponse = await api.post(uploadUrl, formData);
+      console.log("[handleUpload] upload response status:", uploadResponse.status);
+      console.log("[handleUpload] upload response data:", uploadResponse.data);
+
+      const genResponse = await api.post(`/generate-vector-db/${courseId}`);
+      console.log("[handleUpload] generate-vector-db response:", genResponse.status, genResponse.data);
 
       setMessage("Files uploaded and AI knowledge base updated successfully");
       setFiles([]);
       if (onUploadSuccess) onUploadSuccess();
 
     } catch (error) {
-      setMessage(error.response?.data?.detail || "Upload failed.");
+      console.error("[handleUpload] upload error:", error);
+      console.error("[handleUpload] error response:", error.response?.status, error.response?.data);
+      setMessage(error.response?.data?.detail || error.message || "Upload failed.");
     } finally {
       setLoading(false);
     }
