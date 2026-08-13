@@ -185,7 +185,7 @@ def chat(request: ChatRequest):
         try:
             record_generation_metric(
                 model_name="gemini-3.6-flash",
-                prompt_snippet=(request.message[:1000] if hasattr(request, 'message') else None),
+                            raw_prompt=(request.message if hasattr(request, 'message') else None),
                 latency_ms=latency_ms,
                 success=True
             )
@@ -204,7 +204,7 @@ def chat(request: ChatRequest):
         try:
             record_generation_metric(
                 model_name="gemini-3.6-flash",
-                prompt_snippet=(request.message[:1000] if hasattr(request, 'message') else None),
+                            raw_prompt=(request.message if hasattr(request, 'message') else None),
                 latency_ms=None,
                 success=False,
                 error=err
@@ -899,7 +899,7 @@ def course_chat(
         try:
             record_generation_metric(
                 model_name="gemini-3.6-flash",
-                prompt_snippet=(request.question[:1000] if hasattr(request, 'question') else None),
+                            raw_prompt=(request.question if hasattr(request, 'question') else None),
                 latency_ms=latency_ms,
                 success=True
             )
@@ -926,7 +926,7 @@ def course_chat(
         try:
             record_generation_metric(
                 model_name="gemini-3.6-flash",
-                prompt_snippet=(request.question[:1000] if hasattr(request, 'question') else None),
+                            raw_prompt=(request.question if hasattr(request, 'question') else None),
                 latency_ms=None,
                 success=False,
                 error=err
@@ -2093,7 +2093,7 @@ CURRENT QUESTION:
         try:
             record_generation_metric(
                 model_name="gemini-3.6-flash",
-                prompt_snippet=(prompt[:1000] if prompt is not None else None),
+                            raw_prompt=(prompt if prompt is not None else None),
                 latency_ms=latency_ms,
                 success=True,
                 retrieval_id=retrieval_id,
@@ -2113,7 +2113,7 @@ CURRENT QUESTION:
         try:
             record_generation_metric(
                 model_name="gemini-3.6-flash",
-                prompt_snippet=(prompt[:1000] if prompt is not None else None),
+                            raw_prompt=(prompt if prompt is not None else None),
                 latency_ms=None,
                 success=False,
                 error=error_message,
