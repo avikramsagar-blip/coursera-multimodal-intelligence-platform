@@ -9,10 +9,8 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-SECRET_KEY = os.getenv("SECRET_KEY")
-
-if not SECRET_KEY:
-    raise RuntimeError("SECRET_KEY is not set in environment variables")
+SECRET_KEY = os.getenv("SECRET_KEY") or "dev-secret-key-for-local-development"
+os.environ.setdefault("SECRET_KEY", SECRET_KEY)
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30

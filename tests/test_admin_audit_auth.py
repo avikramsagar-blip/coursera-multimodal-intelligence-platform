@@ -4,11 +4,13 @@ from fastapi.testclient import TestClient
 from fastapi import FastAPI
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 # Ensure backend package path
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from backend import database as backend_db
 from backend.database import Base, get_db
 import backend.models as models
 import backend.security as security
@@ -39,9 +41,15 @@ def create_test_app(session_local):
 
 class AuthAuditTests(unittest.TestCase):
     def setUp(self):
-        # Use an in-memory SQLite DB
-        self.engine = create_engine("sqlite:///:memory:")
+        # Use a shared in-memory SQLite DB so each session sees the same tables/data.
+        self.engine = create_engine(
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
         TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+        backend_db.engine = self.engine
+        backend_db.SessionLocal = TestingSessionLocal
         Base.metadata.create_all(bind=self.engine)
         self.db_local = TestingSessionLocal
 

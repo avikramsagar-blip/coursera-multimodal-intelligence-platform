@@ -233,7 +233,7 @@ def review_insight(insight_id: int, payload: ReviewIn, db: Session = Depends(get
 
     # Audit the review action (best-effort)
     try:
-        from audit_utils import record_audit
+        from backend.audit_utils import record_audit
         details = f"action={action};notes={payload.notes};prev_status={prev_status};new_status={insight.status}"
         record_audit(actor_id=current_user.user_id, action_type="insight_review", target_type="insight", target_id=insight.insight_id, details=details)
     except Exception:
