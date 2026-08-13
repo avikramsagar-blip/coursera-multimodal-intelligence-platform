@@ -19,6 +19,7 @@ Implementation notes:
 import os
 import json
 import re
+import logging
 from typing import List, Dict, Any
 
 from dotenv import load_dotenv
@@ -37,45 +38,123 @@ _MAX_TOTAL_CONTEXT = 4000
 def _safe_parse_json(text: str) -> Dict[str, Any]:
     """Attempt to parse JSON from LLM reply. Fall back to best-effort extraction.
 
-    Returns dict with keys 'score' and 'reason'.
+    Returns dict with keys 'score' and 'reason'. If parsing fails, returns
+    {'score': None, 'reason': 'Evaluation unavailable'} and logs details for debugging.
     """
-    # Try direct JSON load
+    logger = logging.getLogger(__name__)
+
+    if not text:
+        logger.debug("Empty response received for parsing.")
+        return {"score": None, "reason": "Evaluation unavailable"}
+
+    # Log the raw response for debugging (not returned to frontend)
+    logger.debug("Raw Gemini response for parsing: %s", text)
+
+    # Helper: strip common markdown/code fences and inline code
+    def _strip_markdown(s: str) -> str:
+        # Remove triple-backtick fences with optional "json" label
+        s = re.sub(r"```(?:json)?\n", "", s, flags=re.IGNORECASE)
+        s = s.replace("```", "")
+        # Remove single backticks around inline code
+        s = re.sub(r"`([^`]*)`", r"\1", s)
+        # Remove common leading labels like "json" alone on a line
+        s = re.sub(r"^\s*json\s*\n", "", s, flags=re.IGNORECASE)
+        return s.strip()
+
+    cleaned = _strip_markdown(text)
+
+    # Try direct JSON parse first
     try:
-        obj = json.loads(text)
-        # Normalize keys
+        obj = json.loads(cleaned)
         score = obj.get("score") if isinstance(obj.get("score"), (int, float)) else None
         reason = obj.get("reason") or obj.get("explanation") or ""
-        # If score is percent as float 0-1 sometimes, convert
+
+        # Normalize score to int when possible
         if isinstance(score, float) and 0.0 <= score <= 1.0:
             score = int(round(score * 100))
         if isinstance(score, float):
             score = int(round(score))
-        return {"score": score, "reason": str(reason)}
-    except Exception:
-        pass
+        if isinstance(score, int):
+            score = int(score)
 
-    # Try to find first integer between 0 and 100
-    m = re.search(r"(\d{1,3})", text)
-    score = None
-    if m:
-        try:
+        reason = str(reason).strip()
+        # Strip any markdown again from reason
+        reason = _strip_markdown(reason)
+        if len(reason) > 400:
+            reason = reason[:400] + "..."
+
+        return {"score": score, "reason": reason}
+    except Exception as e:
+        logger.debug("Direct JSON parse failed: %s", e)
+
+    # If direct parse failed, try to extract a JSON object substring by balancing braces
+    try:
+        s = cleaned
+        start = s.find("{")
+        if start != -1:
+            stack = 0
+            end = -1
+            for i in range(start, len(s)):
+                if s[i] == "{":
+                    stack += 1
+                elif s[i] == "}":
+                    stack -= 1
+                    if stack == 0:
+                        end = i + 1
+                        break
+            if end != -1:
+                candidate = s[start:end]
+                try:
+                    obj = json.loads(candidate)
+                    score = obj.get("score") if isinstance(obj.get("score"), (int, float)) else None
+                    reason = obj.get("reason") or obj.get("explanation") or ""
+
+                    if isinstance(score, float) and 0.0 <= score <= 1.0:
+                        score = int(round(score * 100))
+                    if isinstance(score, float):
+                        score = int(round(score))
+                    if isinstance(score, int):
+                        score = int(score)
+
+                    reason = str(reason).strip()
+                    reason = _strip_markdown(reason)
+                    if len(reason) > 400:
+                        reason = reason[:400] + "..."
+
+                    return {"score": score, "reason": reason}
+                except Exception as e:
+                    logger.debug("JSON load of extracted substring failed: %s", e)
+    except Exception as e:
+        logger.exception("Error while attempting to extract JSON substring: %s", e)
+
+    # As a last effort, try to find the first integer 0-100 in the text and build a short reason
+    try:
+        m = re.search(r"(\d{1,3})", cleaned)
+        score = None
+        if m:
             n = int(m.group(1))
             if 0 <= n <= 100:
                 score = n
-        except Exception:
-            score = None
 
-    # Reason: use the remaining text after the number or whole text
-    reason = text.strip()
-    if score is not None:
-        # remove the first matched number from reason for brevity
-        reason = re.sub(r"\b" + re.escape(str(score)) + r"\b", "", reason, count=1).strip()
+        # Build a non-sensitive reason (do NOT return raw Gemini text)
+        if score is not None:
+            # Try to pull a short reason-like fragment (words following the score)
+            after = cleaned[m.end():].strip() if m else ""
+            # Keep a short snippet or fall back to generic message
+            reason_snippet = ''
+            if after:
+                # Keep first 60 chars worth of words
+                reason_snippet = ' '.join(after.split()[:20])
+            reason = reason_snippet or "Parsed numeric score from evaluator output."
+            if len(reason) > 400:
+                reason = reason[:400] + "..."
+            return {"score": score, "reason": reason}
+    except Exception as e:
+        logger.exception("Fallback numeric-extract parsing error: %s", e)
 
-    # Truncate reason
-    if len(reason) > 400:
-        reason = reason[:400] + "..."
-
-    return {"score": score, "reason": reason or ""}
+    # If everything fails, log and return a safe failure message (no raw model text returned)
+    logger.warning("Failed to parse Gemini response into structured evaluation. Raw response logged for debugging.")
+    return {"score": None, "reason": "Evaluation unavailable"}
 
 
 # -------------------------------
@@ -92,6 +171,8 @@ def evaluate_faithfulness(answer: str, retrieved_context: str, question: str) ->
     The prompt asks the model to compare the answer with the provided context and to
     score how well the factual claims in the answer are supported by the context.
     """
+
+    logger = logging.getLogger(__name__)
 
     if not API_KEY:
         return {"score": None, "reason": "Evaluation unavailable"}
@@ -131,8 +212,12 @@ Provide only a JSON object. Keep reason concise (1-2 sentences).
             contents=prompt
         )
         text = resp.text if hasattr(resp, "text") else str(resp)
-        return _safe_parse_json(text)
-    except Exception:
+        logger.debug("Gemini raw response (faithfulness): %s", text)
+        result = _safe_parse_json(text)
+        logger.debug("Parsed faithfulness evaluation: %s", result)
+        return result
+    except Exception as e:
+        logger.exception("Exception when running faithfulness evaluator: %s", e)
         return {"score": None, "reason": "Evaluation unavailable"}
 
 
@@ -148,6 +233,8 @@ def evaluate_retrieval_recall(retrieved_docs: List[Any], question: str) -> Dict[
 
     Returns {"score": int|None, "reason": str}.
     """
+
+    logger = logging.getLogger(__name__)
 
     if not API_KEY:
         return {"score": None, "reason": "Evaluation unavailable"}
@@ -196,6 +283,10 @@ Provide only a JSON object. Keep reason concise (1-2 sentences).
             contents=prompt
         )
         text = resp.text if hasattr(resp, "text") else str(resp)
-        return _safe_parse_json(text)
-    except Exception:
+        logger.debug("Gemini raw response (retrieval_recall): %s", text)
+        result = _safe_parse_json(text)
+        logger.debug("Parsed retrieval_recall evaluation: %s", result)
+        return result
+    except Exception as e:
+        logger.exception("Exception when running retrieval recall evaluator: %s", e)
         return {"score": None, "reason": "Evaluation unavailable"}

@@ -1,0 +1,147 @@
+# Copilot setup steps for Coursera Multimodal Intelligence Platform
+# Purpose:
+# - Provide Copilot (and contributors) with an ordered, OS-aware set of steps to install
+#   dependencies, configure the environment, and run the app locally.
+# - Include exact commands Copilot can suggest or run in the terminal inside VS Code.
+# - Explain optional/required steps, common failure points, and how to fix them.
+
+# Usage:
+# - Open this repository in VS Code. Copilot / Copilot CLI or other automation features
+#   can read this file to present a guided setup workflow to new contributors.
+# - The commands below are safe for development and use the project's setup scripts when possible.
+
+meta:
+  name: Coursera Multimodal Intelligence Platform - Setup
+  repo_root: true
+  author: repo-maintainer
+  recommended_logging_level: DEBUG
+
+prerequisites:
+  - Git (to clone the repo)
+  - Python: 3.10 or newer (python --version)
+  - Node.js: 18+ and npm (node --version, npm --version)
+  - ffmpeg on PATH (optional, required for media transcription)
+  - (Windows only) Visual C++ Build Tools OR Conda/WSL preferred for binary dependencies
+
+# Top-level quick 'one-click' actions (if user prefers scripts)
+quick_actions:
+  - id: run_windows_setup
+    label: Run Windows setup.bat
+    description: "Creates venv, installs backend & frontend deps and creates required directories"
+    os: windows
+    run: |
+      setup.bat
+  - id: run_unix_setup
+    label: Run Unix setup.sh
+    description: "Creates venv, installs backend & frontend deps and creates required directories"
+    os: unix
+    run: |
+      chmod +x setup.sh
+      ./setup.sh
+
+steps:
+  - id: create_virtualenv
+    title: Create & activate Python virtual environment (recommended)
+    description: "Creates a venv named 'venv' and activates it. Use PowerShell on Windows or bash on Mac/Linux."
+    os:
+      windows: |
+        python -m venv venv
+        .\venv\Scripts\Activate.ps1   # PowerShell: run as script
+      unix: |
+        python3 -m venv venv
+        source venv/bin/activate
+    validate:
+      - python -c "import sys; assert sys.version_info >= (3,10)"
+
+  - id: upgrade_pip_and_install_backend
+    title: Install backend Python dependencies
+    description: "Upgrades pip and installs packages from backend/requirements.txt. This installs faiss-cpu and other heavy deps; if it fails on Windows, use conda or WSL."
+    run: |
+      # activate venv before running these commands
+      python -m pip install --upgrade pip
+      pip install -r backend/requirements.txt
+    notes:
+      - If faiss-cpu fails on Windows: `conda install -c conda-forge faiss-cpu` (using conda)
+      - If grpcio/cryptography or other wheel builds fail: ensure Visual C++ Build Tools are installed or use conda
+
+  - id: install_frontend
+    title: Install frontend dependencies (npm)
+    description: "Installs node packages in the frontend folder."
+    run: |
+      cd frontend
+      npm install
+      cd ..
+
+  - id: create_required_dirs
+    title: Create required directories
+    description: "Ensure upload, faiss indexes and logs directories exist. The setup scripts already attempt this."
+    run: |
+      mkdir -p backend/uploads
+      mkdir -p backend/faiss_indexes
+      mkdir -p backend/logs
+      mkdir -p backend/temp
+
+  - id: copy_dotenv
+    title: Copy .env.example to .env and edit
+    description: "Copy the example env to .env and set values. GEMINI_API_KEY is optional for local dev but required for RAG/embeddings."
+    run: |
+      copy .env.example .env    # Windows (PowerShell/CMD)
+      # OR
+      cp .env.example .env      # macOS/Linux
+    next_instructions: |
+      - Open .env and set SECRET_KEY and DATABASE_URL (default is sqlite:///./dev.db)
+      - If using Gemini embeddings/LLM features, set GEMINI_API_KEY
+      - If using Cloudinary for media uploads, set CLOUDINARY_* variables
+
+  - id: start_backend
+    title: Start backend server (development)
+    description: "Start the FastAPI backend with uvicorn. Ensure the venv is activated first."
+    run: |
+      # Activate your venv first (see earlier step). Then run:
+      python -m uvicorn backend.main:app --reload --port 8000
+    validate:
+      - "curl --fail http://127.0.0.1:8000/health || (echo 'backend not healthy' && exit 1)"
+    notes: |
+      - You should see startup logs: Database connection, tables created/verified, FAISS directory, Gemini key detected/not detected.
+
+  - id: start_frontend
+    title: Start frontend dev server (Vite)
+    description: "Start the React + Vite frontend."
+    run: |
+      cd frontend
+      npm run dev
+    validate:
+      - "# open http://localhost:5173 in browser"
+
+troubleshooting:
+  - id: faiss_windows
+    title: faiss-cpu installation failing on Windows
+    solution: |
+      - Preferred: install miniconda/conda, then `conda install -c conda-forge faiss-cpu`
+      - Alternative: run the project inside WSL (Ubuntu) or use a Linux/macOS machine
+  - id: ffmpeg_missing
+    title: ffmpeg not found (media/transcription errors)
+    solution: |
+      - macOS: brew install ffmpeg
+      - Ubuntu/Debian: sudo apt install ffmpeg
+      - Windows: choco install ffmpeg OR download prebuilt binaries and add to PATH
+  - id: build_tools
+    title: Python wheel build errors on Windows
+    solution: |
+      - Install "Build Tools for Visual Studio" (C++ compilers)
+      - Or use conda to avoid building wheels from source
+
+optional_features:
+  embeddings_and_rag:
+    description: "To enable embeddings, vectorization and RAG features set GEMINI_API_KEY in .env. Without it the app runs but RAG/embedding features are limited."
+    steps:
+      - set: GEMINI_API_KEY=<your_key>
+      - restart backend
+
+notes:
+  - Root package.json dev script has been aligned with the setup scripts and now uses a venv named 'venv' on Windows. After running setup.bat you can run `npm run dev` from the repository root to start both backend and frontend concurrently. If you use a different venv name, update package.json or run backend and frontend in separate terminals.
+  - For DB: default is SQLite (dev). To use Postgres, set DATABASE_URL to a Postgres connection string and ensure the server is running.
+
+# End of copilot-setup-steps.yml
+# This file is intentionally human-readable and structured so Copilot or automation tools
+# can present steps and run exact commands when the repository is opened in VS Code.

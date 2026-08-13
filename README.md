@@ -116,6 +116,8 @@ cd frontend
 npm run dev
 ```
 
+On Windows: after running the provided setup.bat (which creates a venv named `venv`), you can run `npm run dev` from the repository root to start both backend and frontend concurrently (the root `package.json` dev script uses the `venv` Python). Alternatively you can start backend and frontend in separate terminals as shown above.
+
 Default backend base URL in frontend is `http://127.0.0.1:8000`.
 
 5. What to expect on first run
