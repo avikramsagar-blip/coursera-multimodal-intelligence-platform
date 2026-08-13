@@ -1,6 +1,17 @@
 {
+  "name": "coursera-multimodal-intelligence-platform",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start:backend": "cd backend && ..\\venv\\Scripts\\python.exe -m uvicorn backend.main:app --reload --port 8000",
+    "start:frontend": "cd frontend && npm run dev",
+    "dev": "concurrently \"npm: start:backend\" \"npm: start:frontend\""
+  },
   "dependencies": {
     "@mui/icons-material": "^7.3.11",
     "@mui/material": "^7.3.11"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
   }
 }
