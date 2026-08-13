@@ -51,3 +51,22 @@ def set_user_role(user_id: int, payload: RoleUpdate, db: Session = Depends(get_d
         pass
 
     return {"user_id": user.user_id, "role": user.role}
+
+
+@router.get('/admin/audits')
+def list_audits(limit: int = 100, since_hours: int = 24, db: Session = Depends(get_db), current_user: models.User = Depends(admin_required)):
+    from datetime import datetime, timedelta
+    since = datetime.utcnow() - timedelta(hours=since_hours)
+    rows = db.query(models.AuditLog).filter(models.AuditLog.created_at >= since).order_by(models.AuditLog.created_at.desc()).limit(limit).all()
+    out = []
+    for r in rows:
+        out.append({
+            'audit_id': r.audit_id,
+            'actor_id': r.actor_id,
+            'action_type': r.action_type,
+            'target_type': r.target_type,
+            'target_id': r.target_id,
+            'details': r.details,
+            'created_at': r.created_at
+        })
+    return {'audits': out}
