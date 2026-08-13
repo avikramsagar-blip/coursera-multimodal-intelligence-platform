@@ -20,16 +20,23 @@ if EXTRA_PATTERNS_RAW:
                 pass
 
 import re
-from cryptography.fernet import Fernet, InvalidToken
 
 ENCRYPT_PROMPT = os.getenv("METRICS_ENCRYPT_PROMPT", "false").lower() in ("1", "true", "yes")
 FERNET_KEY = os.getenv("METRICS_ENCRYPTION_KEY")
 FERNET = None
+FERNET_AVAILABLE = False
 if ENCRYPT_PROMPT and FERNET_KEY:
     try:
-        FERNET = Fernet(FERNET_KEY.encode() if isinstance(FERNET_KEY, str) else FERNET_KEY)
+        from cryptography.fernet import Fernet
+        FERNET_AVAILABLE = True
     except Exception:
-        FERNET = None
+        FERNET_AVAILABLE = False
+    if FERNET_AVAILABLE:
+        try:
+            FERNET = Fernet(FERNET_KEY.encode() if isinstance(FERNET_KEY, str) else FERNET_KEY)
+        except Exception:
+            FERNET = None
+            FERNET_AVAILABLE = False
 
 
 def sanitize_prompt(text: str) -> str:
@@ -103,7 +110,7 @@ def decrypt_text(token: str) -> str | None:
     try:
         plain = FERNET.decrypt(token.encode('utf-8'))
         return plain.decode('utf-8')
-    except (InvalidToken, Exception):
+    except Exception:
         return None
 
 
