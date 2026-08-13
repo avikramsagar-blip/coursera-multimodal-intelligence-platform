@@ -3,9 +3,9 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional, List, Any
 from sqlalchemy.orm import Session
-from database import get_db
-import models
-import security
+from backend.database import get_db
+import backend.models as models
+import backend.security as security
 from datetime import datetime
 
 router = APIRouter()
