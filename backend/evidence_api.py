@@ -1,11 +1,24 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional, List, Any
 from sqlalchemy.orm import Session
 from database import get_db
 import models
+import security
+from datetime import datetime
 
 router = APIRouter()
+security_scheme = HTTPBearer()
+
+# Local dependency to get current user to avoid circular import with main
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security_scheme), db: Session = Depends(get_db)):
+    token = credentials.credentials
+    email = security.verify_access_token(token)
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
 
 # Pydantic schemas
 class EvidenceIn(BaseModel):
@@ -38,12 +51,16 @@ class InsightOut(BaseModel):
     insight_id: int
     status: str
 
+class ReviewIn(BaseModel):
+    action: str  # approved, rejected, request_changes
+    notes: Optional[str] = None
+
 
 @router.post("/retrievals")
-def create_retrieval(payload: RetrievalIn, db: Session = Depends(get_db)):
+def create_retrieval(payload: RetrievalIn, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     rec = models.RetrievalRecord(
         query=payload.query,
-        user_id=payload.user_id,
+        user_id=payload.user_id or current_user.user_id,
         retriever=payload.retriever,
         metadata=str(payload.metadata) if payload.metadata is not None else None
     )
@@ -54,7 +71,7 @@ def create_retrieval(payload: RetrievalIn, db: Session = Depends(get_db)):
 
 
 @router.post("/evidence/bulk")
-def create_evidence_bulk(items: List[EvidenceIn], db: Session = Depends(get_db)):
+def create_evidence_bulk(items: List[EvidenceIn], db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     created_ids = []
     for it in items:
         ev = models.Evidence(
@@ -76,13 +93,13 @@ def create_evidence_bulk(items: List[EvidenceIn], db: Session = Depends(get_db))
 
 
 @router.post("/insights", response_model=InsightOut)
-def create_insight(payload: InsightCreate, db: Session = Depends(get_db)):
+def create_insight(payload: InsightCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     # Create insight record
     insight = models.Insight(
         title=payload.title,
         summary=payload.summary,
         generated_by_model_id=payload.generated_by_model_id,
-        created_by=payload.created_by
+        created_by=payload.created_by or current_user.user_id
     )
     db.add(insight)
     db.flush()
@@ -119,7 +136,7 @@ def create_insight(payload: InsightCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/insights/{insight_id}/evidence")
-def get_insight_evidence(insight_id: int, db: Session = Depends(get_db)):
+def get_insight_evidence(insight_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     insight = db.query(models.Insight).filter(models.Insight.insight_id == insight_id).first()
     if not insight:
         raise HTTPException(status_code=404, detail="Insight not found")
@@ -146,3 +163,59 @@ def get_insight_evidence(insight_id: int, db: Session = Depends(get_db)):
         })
 
     return {"insight_id": insight_id, "evidence": evidence_list}
+
+
+@router.get("/insights")
+def list_insights(status: Optional[str] = None, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    q = db.query(models.Insight)
+    if status:
+        q = q.filter(models.Insight.status == status)
+    insights = q.order_by(models.Insight.created_at.desc()).limit(100).all()
+    out = []
+    for ins in insights:
+        out.append({
+            "insight_id": ins.insight_id,
+            "title": ins.title,
+            "summary": ins.summary,
+            "status": ins.status,
+            "created_at": ins.created_at,
+            "reviewed_by": ins.reviewed_by,
+            "reviewed_at": ins.reviewed_at
+        })
+    return {"insights": out}
+
+
+@router.post("/insights/{insight_id}/review")
+def review_insight(insight_id: int, payload: ReviewIn, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    insight = db.query(models.Insight).filter(models.Insight.insight_id == insight_id).first()
+    if not insight:
+        raise HTTPException(status_code=404, detail="Insight not found")
+
+    action = payload.action.lower()
+    if action not in {"approved", "rejected", "request_changes", "approve", "reject"}:
+        raise HTTPException(status_code=400, detail="Invalid review action")
+
+    # Normalize action
+    if action == "approve":
+        action = "approved"
+    if action == "reject":
+        action = "rejected"
+
+    # Create review record
+    review = models.Review(
+        insight_id=insight.insight_id,
+        reviewer_id=current_user.user_id,
+        action=action,
+        notes=payload.notes
+    )
+    db.add(review)
+
+    # Update insight status and reviewed metadata
+    insight.status = "approved" if action == "approved" else ("rejected" if action == "rejected" else "pending_review")
+    insight.reviewed_by = current_user.user_id
+    insight.reviewed_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(insight)
+
+    return {"insight_id": insight.insight_id, "status": insight.status}

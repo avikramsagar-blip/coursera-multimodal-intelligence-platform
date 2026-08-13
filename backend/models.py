@@ -271,6 +271,8 @@ class Insight(Base):
     generated_by_model_id = Column(Integer, ForeignKey("ai_models.model_id"), nullable=True)
     created_by = Column(Integer, ForeignKey("users.user_id"), nullable=True)
     status = Column(String, default="pending_review")  # pending_review, approved, rejected
+    reviewed_by = Column(Integer, ForeignKey("users.user_id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -282,4 +284,15 @@ class InsightEvidence(Base):
     evidence_id = Column(Integer, ForeignKey("evidence.evidence_id"), nullable=False)
     retrieval_id = Column(Integer, ForeignKey("retrieval_records.retrieval_id"), nullable=True)
     score = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Review(Base):
+    __tablename__ = "reviews"
+
+    review_id = Column(Integer, primary_key=True, index=True)
+    insight_id = Column(Integer, ForeignKey("insights.insight_id"), nullable=False)
+    reviewer_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
+    action = Column(String, nullable=False)  # approved, rejected, request_changes
+    notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
