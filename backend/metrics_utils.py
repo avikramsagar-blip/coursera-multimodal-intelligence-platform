@@ -6,6 +6,53 @@ import models
 from sqlalchemy.exc import SQLAlchemyError
 
 REDACT_PROMPT = os.getenv("METRICS_REDACT_PROMPT", "true").lower() in ("1", "true", "yes")
+SANITIZE_PROMPT = os.getenv("METRICS_SANITIZE_PROMPT", "true").lower() in ("1", "true", "yes")
+
+import re
+
+
+def sanitize_prompt(text: str) -> str:
+    """Sanitize a prompt by redacting common PII patterns.
+
+    Replacements:
+    - Emails => <REDACTED_EMAIL>
+    - URLs => <REDACTED_URL>
+    - UUIDs => <REDACTED_UUID>
+    - Long digit sequences (8+ digits) => <REDACTED_NUMBER>
+    - Credit-card-like sequences (13-19 digits) => <REDACTED_NUMBER>
+    - Phone-like sequences => <REDACTED_PHONE>
+
+    The function returns the sanitized text.
+    """
+    if not text:
+        return text
+
+    s = text
+
+    # Emails
+    s = re.sub(r"[\w\.-]+@[\w\.-]+\.[A-Za-z]{2,}", "<REDACTED_EMAIL>", s)
+
+    # URLs (http/https)
+    s = re.sub(r"https?://\S+", "<REDACTED_URL>", s)
+    s = re.sub(r"www\.\S+", "<REDACTED_URL>", s)
+
+    # UUIDs
+    s = re.sub(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b", "<REDACTED_UUID>", s)
+
+    # Credit card like sequences (13 to 19 digits with optional separators)
+    s = re.sub(r"\b(?:\d[ -]*?){13,19}\b", "<REDACTED_NUMBER>", s)
+
+    # Phone numbers (simple heuristic)
+    s = re.sub(r"\+?\d[\d\-\s]{7,}\d", "<REDACTED_PHONE>", s)
+
+    # Long pure digit sequences (8+)
+    s = re.sub(r"\b\d{8,}\b", "<REDACTED_NUMBER>", s)
+
+    # Trim excessive whitespace
+    s = re.sub(r"\s+", " ", s).strip()
+
+    return s
+
 
 # Utility to record generation metrics using an independent DB session
 # Accepts raw_prompt for hashing/redaction and maintains backward-compatible prompt_snippet
@@ -77,20 +124,26 @@ def record_generation_metric(
     retrieval_id: int | None = None,
     insight_id: int | None = None,
 ):
-    # Compute hash if not provided
+    # Sanitize prompt if enabled
+    sanitized = None
+    if raw_prompt is not None:
+        sanitized = sanitize_prompt(raw_prompt) if SANITIZE_PROMPT else raw_prompt
+
+    # Compute hash if not provided (hash the sanitized value)
     computed_hash = prompt_hash
-    if raw_prompt and not computed_hash:
+    if sanitized and not computed_hash:
         h = hashlib.sha256()
-        h.update(raw_prompt.encode("utf-8"))
+        h.update(sanitized.encode("utf-8"))
         computed_hash = h.hexdigest()
 
     # Decide whether to store prompt snippet based on REDACT_PROMPT
     stored_snippet = None
     if not REDACT_PROMPT:
         if prompt_snippet is not None:
-            stored_snippet = prompt_snippet[:1000]
-        elif raw_prompt is not None:
-            stored_snippet = raw_prompt[:1000]
+            # sanitize snippet too if needed
+            stored_snippet = sanitize_prompt(prompt_snippet)[:1000] if SANITIZE_PROMPT else prompt_snippet[:1000]
+        elif sanitized is not None:
+            stored_snippet = sanitized[:1000]
 
     db = SessionLocal()
     try:
