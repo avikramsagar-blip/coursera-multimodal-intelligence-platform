@@ -6,8 +6,8 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 # Load environment variables
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 
-# Database URL
-DATABASE_URL = os.getenv("DATABASE_URL")
+# Database URL (fall back to a local sqlite dev DB when not set)
+DATABASE_URL = os.getenv("DATABASE_URL") or "sqlite:///./dev.db"
 
 # Create SQLAlchemy Engine
 engine = create_engine(DATABASE_URL)
