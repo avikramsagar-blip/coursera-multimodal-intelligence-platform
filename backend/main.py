@@ -1712,6 +1712,24 @@ Previous AI Answer:
     print("=== END RETRIEVAL QUERY DEBUG ===")
 
     # ---------------------------------
+    # Create Retrieval Record (traceability)
+    # ---------------------------------
+    try:
+        retrieval_rec = models.RetrievalRecord(
+            query=retrieval_query,
+            user_id=current_user.user_id,
+            retriever="faiss_rerank",
+            metadata=str({"course_id": request.course_id})
+        )
+        db.add(retrieval_rec)
+        db.flush()
+        retrieval_id = retrieval_rec.retrieval_id
+    except Exception as e:
+        db.rollback()
+        print(f"Warning: failed to create retrieval record: {e}")
+        retrieval_id = None
+
+    # ---------------------------------
     # Retrieve RAG Chunks
     # ---------------------------------
     docs = search_chunks(
@@ -2028,13 +2046,58 @@ CURRENT QUESTION:
         )
         latency_ms = (time.time() - start_ts) * 1000.0
 
-        # record metric (best-effort)
+        # Create an Insight record and link evidence for traceability
+        try:
+            insight = models.Insight(
+                title=(request.question[:200] if request.question else None),
+                summary=response.text if hasattr(response, 'text') else str(response),
+                generated_by_model_id=None,
+                created_by=current_user.user_id
+            )
+            db.add(insight)
+            db.flush()
+            insight_id = insight.insight_id
+
+            # Create Evidence records for each retrieved doc and link
+            for doc in docs:
+                md = doc.metadata if hasattr(doc, 'metadata') else {}
+                ev = models.Evidence(
+                    source_type=md.get('source', 'unknown'),
+                    source_id=md.get('video_id') or md.get('source_id'),
+                    segment_id=md.get('segment_id'),
+                    start_time=md.get('start_time'),
+                    end_time=md.get('end_time'),
+                    snippet_text=(doc.page_content[:4000] if hasattr(doc, 'page_content') else None),
+                    source_uri=None,
+                    embedding_id=md.get('embedding_id'),
+                    metadata=str(md)
+                )
+                db.add(ev)
+                db.flush()
+
+                link = models.InsightEvidence(
+                    insight_id=insight_id,
+                    evidence_id=ev.evidence_id,
+                    retrieval_id=retrieval_id,
+                    score=None
+                )
+                db.add(link)
+
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            print(f"Warning: failed to create insight/evidence links: {e}")
+            insight_id = None
+
+        # record metric (with retrieval_id and insight_id)
         try:
             record_generation_metric(
                 model_name="gemini-3.6-flash",
                 prompt_snippet=(prompt[:1000] if prompt is not None else None),
                 latency_ms=latency_ms,
-                success=True
+                success=True,
+                retrieval_id=retrieval_id,
+                insight_id=insight_id
             )
         except Exception:
             pass
@@ -2053,7 +2116,8 @@ CURRENT QUESTION:
                 prompt_snippet=(prompt[:1000] if prompt is not None else None),
                 latency_ms=None,
                 success=False,
-                error=error_message
+                error=error_message,
+                retrieval_id=retrieval_id,
             )
         except Exception:
             pass
