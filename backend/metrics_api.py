@@ -79,6 +79,37 @@ def get_generation_metrics(model_name: Optional[str] = None, since_hours: int = 
     }
 
 
+@router.get("/metrics/dashboard")
+def get_metrics_dashboard(db: Session = Depends(get_db), current_user: models.User = Depends(require_roles(["ops", "admin"]))):
+    # Aggregate metrics per model_name
+    q = db.query(models.GenerationMetric).order_by(models.GenerationMetric.created_at.desc())
+    rows = q.all()
+    from collections import defaultdict
+    agg = defaultdict(list)
+    for r in rows:
+        agg[r.model_name].append(r)
+
+    out = []
+    for model_name, items in agg.items():
+        total = len(items)
+        latencies = [it.latency_ms for it in items if it.latency_ms is not None]
+        tokens_in = [it.tokens_in for it in items if it.tokens_in is not None]
+        tokens_out = [it.tokens_out for it in items if it.tokens_out is not None]
+        successes = sum(1 for it in items if it.success)
+        last_seen = max(it.created_at for it in items)
+        out.append({
+            "model_name": model_name,
+            "total_calls": total,
+            "avg_latency_ms": (sum(latencies)/len(latencies)) if latencies else None,
+            "success_rate": successes/total if total else None,
+            "avg_tokens_in": (sum(tokens_in)/len(tokens_in)) if tokens_in else None,
+            "avg_tokens_out": (sum(tokens_out)/len(tokens_out)) if tokens_out else None,
+            "last_seen": last_seen
+        })
+
+    return {"models": out}
+
+
 # Optional: raw listing endpoint
 @router.get("/metrics/generation/raw")
 def get_generation_metrics_raw(limit: int = 100, db: Session = Depends(get_db), current_user: models.User = Depends(require_roles(["ops", "admin", "reviewer"]))):

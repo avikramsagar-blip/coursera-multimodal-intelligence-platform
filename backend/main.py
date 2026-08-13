@@ -107,6 +107,13 @@ try:
     app.include_router(metrics_router, prefix="/api")
 except Exception as _e:
     print(f"metrics_api import failed: {_e}")
+
+# Include admin API (role management, admin-only)
+try:
+    from admin_api import router as admin_router
+    app.include_router(admin_router, prefix="/api")
+except Exception as _e:
+    print(f"admin_api import failed: {_e}")
 UPLOAD_DIR = os.path.join(
     os.path.dirname(__file__),
     "uploads"

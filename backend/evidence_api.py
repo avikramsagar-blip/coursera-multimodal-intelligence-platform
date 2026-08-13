@@ -223,11 +223,20 @@ def review_insight(insight_id: int, payload: ReviewIn, db: Session = Depends(get
     db.add(review)
 
     # Update insight status and reviewed metadata
+    prev_status = insight.status
     insight.status = "approved" if action == "approved" else ("rejected" if action == "rejected" else "pending_review")
     insight.reviewed_by = current_user.user_id
     insight.reviewed_at = datetime.utcnow()
 
     db.commit()
     db.refresh(insight)
+
+    # Audit the review action (best-effort)
+    try:
+        from audit_utils import record_audit
+        details = f"action={action};notes={payload.notes};prev_status={prev_status};new_status={insight.status}"
+        record_audit(actor_id=current_user.user_id, action_type="insight_review", target_type="insight", target_id=insight.insight_id, details=details)
+    except Exception:
+        pass
 
     return {"insight_id": insight.insight_id, "status": insight.status}

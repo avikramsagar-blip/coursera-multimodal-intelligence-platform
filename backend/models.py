@@ -313,3 +313,15 @@ class GenerationMetric(Base):
     retrieval_id = Column(Integer, ForeignKey("retrieval_records.retrieval_id"), nullable=True)
     insight_id = Column(Integer, ForeignKey("insights.insight_id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    audit_id = Column(Integer, primary_key=True, index=True)
+    actor_id = Column(Integer, ForeignKey("users.user_id"), nullable=True)
+    action_type = Column(String, nullable=False)   # e.g., insight_review, role_change
+    target_type = Column(String, nullable=True)   # e.g., insight, user
+    target_id = Column(Integer, nullable=True)
+    details = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
