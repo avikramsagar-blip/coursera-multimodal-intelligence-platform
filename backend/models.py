@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Text, BigInteger, ForeignKey, TIMESTAMP, DateTime, Float, Boolean
 from sqlalchemy.sql import func
 from datetime import datetime
-from database import Base
+from backend.database import Base
 import yt_dlp
 
 class User(Base):
