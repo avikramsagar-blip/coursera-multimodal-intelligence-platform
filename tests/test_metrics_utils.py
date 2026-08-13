@@ -1,118 +1,83 @@
 import os
-import hashlib
-import time
-from database import SessionLocal
-import models
-from sqlalchemy.exc import SQLAlchemyError
+import importlib
+import sys
+import unittest
 
-REDACT_PROMPT = os.getenv("METRICS_REDACT_PROMPT", "true").lower() in ("1", "true", "yes")
-SANITIZE_PROMPT = os.getenv("METRICS_SANITIZE_PROMPT", "true").lower() in ("1", "true", "yes")
+# Ensure the backend package is importable
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Extra sanitization patterns can be provided via env:
-# METRICS_SANITIZE_EXTRA = "pattern1:::REPL1;pattern2:::REPL2"
-EXTRA_PATTERNS_RAW = os.getenv("METRICS_SANITIZE_EXTRA", "")
-EXTRA_PATTERNS = []
-if EXTRA_PATTERNS_RAW:
-    for part in EXTRA_PATTERNS_RAW.split(';'):
-        if ':::' in part:
-            pat, repl = part.split(':::', 1)
-            try:
-                EXTRA_PATTERNS.append((re.compile(pat), repl))
-            except Exception:
-                # ignore invalid patterns
-                pass
+class MetricsUtilsTest(unittest.TestCase):
+    def setUp(self):
+        # Remove module if already loaded to force re-import with env changes
+        if 'metrics_utils' in sys.modules:
+            del sys.modules['metrics_utils']
 
-import re
-from cryptography.fernet import Fernet, InvalidToken
+    def test_sanitize_email_url_phone_card(self):
+        import metrics_utils
+        # Email
+        s = "Contact: john.doe@example.com"
+        out = metrics_utils.sanitize_prompt(s)
+        self.assertIn("<REDACTED_EMAIL>", out)
 
-ENCRYPT_PROMPT = os.getenv("METRICS_ENCRYPT_PROMPT", "false").lower() in ("1", "true", "yes")
-FERNET_KEY = os.getenv("METRICS_ENCRYPTION_KEY")
-FERNET = None
-if ENCRYPT_PROMPT and FERNET_KEY:
-    try:
-        FERNET = Fernet(FERNET_KEY.encode() if isinstance(FERNET_KEY, str) else FERNET_KEY)
-    except Exception:
-        FERNET = None
+        # URL
+        s2 = "Visit http://example.com/path"
+        out2 = metrics_utils.sanitize_prompt(s2)
+        self.assertIn("<REDACTED_URL>", out2)
 
+        # Phone
+        s3 = "Call me at +1 555-123-4567"
+        out3 = metrics_utils.sanitize_prompt(s3)
+        self.assertIn("<REDACTED_PHONE>", out3)
 
-def sanitize_prompt(text: str) -> str:
-    """Sanitize a prompt by redacting common PII patterns.
+        # Card-like number
+        s4 = "Card 4111 1111 1111 1111"
+        out4 = metrics_utils.sanitize_prompt(s4)
+        self.assertIn("<REDACTED_NUMBER>", out4)
 
-    Replacements:
-    - Emails => <REDACTED_EMAIL>
-    - URLs => <REDACTED_URL>
-    - UUIDs => <REDACTED_UUID>
-    - Long digit sequences (8+ digits) => <REDACTED_NUMBER>
-    - Credit-card-like sequences (13-19 digits) => <REDACTED_NUMBER>
-    - Phone-like sequences => <REDACTED_PHONE>
+    def test_extra_patterns_env(self):
+        # Set extra pattern and reload module
+        os.environ['METRICS_SANITIZE_EXTRA'] = r"SECRET(\d+):::<SNUM>"
+        if 'metrics_utils' in sys.modules:
+            del sys.modules['metrics_utils']
+        import metrics_utils
+        importlib.reload(metrics_utils)
+        s = "This is SECRET12345 in text"
+        out = metrics_utils.sanitize_prompt(s)
+        self.assertIn("<SNUM>", out)
+        # cleanup
+        del os.environ['METRICS_SANITIZE_EXTRA']
 
-    The function returns the sanitized text.
-    """
-    if not text:
-        return text
-
-    s = text
-
-    # Emails
-    s = re.sub(r"[\w\.-]+@[\w\.-]+\.[A-Za-z]{2,}", "<REDACTED_EMAIL>", s)
-
-    # URLs (http/https)
-    s = re.sub(r"https?://\S+", "<REDACTED_URL>", s)
-    s = re.sub(r"www\.\S+", "<REDACTED_URL>", s)
-
-    # UUIDs
-    s = re.sub(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b", "<REDACTED_UUID>", s)
-
-    # Credit card like sequences (13 to 19 digits with optional separators)
-    s = re.sub(r"\b(?:\d[ -]*?){13,19}\b", "<REDACTED_NUMBER>", s)
-
-    # Phone numbers (simple heuristic)
-    s = re.sub(r"\+?\d[\d\-\s]{7,}\d", "<REDACTED_PHONE>", s)
-
-    # Long pure digit sequences (8+)
-    s = re.sub(r"\b\d{8,}\b", "<REDACTED_NUMBER>", s)
-
-    # Trim excessive whitespace
-    s = re.sub(r"\s+", " ", s).strip()
-
-    # Apply extra patterns
-    for (pattern, repl) in EXTRA_PATTERNS:
+    def test_encrypt_decrypt(self):
+        # enable encryption
         try:
-            s = pattern.sub(repl, s)
+            from cryptography.fernet import Fernet
         except Exception:
-            pass
+            self.skipTest('cryptography not available')
 
-    return s
+        key = Fernet.generate_key().decode('utf-8')
+        os.environ['METRICS_ENCRYPT_PROMPT'] = 'true'
+        os.environ['METRICS_ENCRYPTION_KEY'] = key
 
+        if 'metrics_utils' in sys.modules:
+            del sys.modules['metrics_utils']
+        import metrics_utils
+        importlib.reload(metrics_utils)
 
-# Encryption helpers
-def encrypt_text(plain: str) -> str | None:
-    if not plain:
-        return None
-    if not ENCRYPT_PROMPT or not FERNET:
-        return None
-    try:
-        token = FERNET.encrypt(plain.encode('utf-8'))
-        return token.decode('utf-8')
-    except Exception:
-        return None
+        plain = 'Hello john.doe@example.com and visit http://x.com'
+        sanitized = metrics_utils.sanitize_prompt(plain)
+        enc = metrics_utils.encrypt_text(sanitized)
+        self.assertIsNotNone(enc)
+        dec = metrics_utils.decrypt_text(enc)
+        self.assertIsNotNone(dec)
+        # decrypted should equal sanitized
+        self.assertEqual(dec, sanitized)
 
+        # cleanup
+        del os.environ['METRICS_ENCRYPT_PROMPT']
+        del os.environ['METRICS_ENCRYPTION_KEY']
 
-def decrypt_text(token: str) -> str | None:
-    if not token:
-        return None
-    if not ENCRYPT_PROMPT or not FERNET:
-        return None
-    try:
-        plain = FERNET.decrypt(token.encode('utf-8'))
-        return plain.decode('utf-8')
-    except (InvalidToken, Exception):
-        return None
-
-
-# Utility to record generation metrics using an independent DB session
-# Accepts raw_prompt for hashing/redaction and maintains backward-compatible prompt_snippet
-def extract_token_usage(response) -> tuple[int|None, int|None]:
+if __name__ == '__main__':
+    unittest.main()
     """Try multiple response fields to extract prompt and completion token counts.
 
     Returns (tokens_in, tokens_out) where either value may be None if not available.
