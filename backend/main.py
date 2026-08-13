@@ -1873,6 +1873,33 @@ There are TWO types of information available:
 
 IMPORTANT RULES:
 
+- Every answer must include supporting citations.
+
+- When using COURSE MATERIAL, cite:
+  Source, Page and Chunk.
+
+Example:
+(Source: course_notes.pdf, Page: 12, Chunk: 4)
+
+- When using VIDEO TRANSCRIPT, cite:
+  Video Title and Timestamp.
+
+Example:
+(Video: Introduction to Python, Timestamp: 120s-145s)
+
+- Include citations immediately after the statement they support.
+
+- Never provide an answer without citations unless responding:
+"I don't know from the course material."
+
+- Use the PREVIOUS CONVERSATION only to understand
+  references and follow-up questions such as
+  "it", "this", "that", or "the above".
+
+- Factual claims must be supported by the current
+  retrieved course material, video transcripts,
+  or video metadata.
+
 - Use the PREVIOUS CONVERSATION only to understand
   references and follow-up questions such as
   "it", "this", "that", or "the above".
