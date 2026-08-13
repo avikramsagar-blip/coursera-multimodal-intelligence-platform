@@ -90,6 +90,14 @@ cloudinary.config(
 # FastAPI App
 # -----------------------------
 app = FastAPI()
+
+# Include evidence traceability API
+try:
+    from evidence_api import router as evidence_router
+    app.include_router(evidence_router, prefix="/api")
+except Exception as _e:
+    # If evidence_api cannot be imported (e.g., during initial setup), log and continue
+    print(f"evidence_api import failed: {_e}")
 UPLOAD_DIR = os.path.join(
     os.path.dirname(__file__),
     "uploads"

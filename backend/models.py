@@ -233,3 +233,53 @@ class CourseImage(Base):
     image_url = Column(String, nullable=False)
     order_no = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class RetrievalRecord(Base):
+    __tablename__ = "retrieval_records"
+
+    retrieval_id = Column(Integer, primary_key=True, index=True)
+    query = Column(Text, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.user_id"), nullable=True)
+    retriever = Column(String, nullable=True)
+    metadata = Column(Text, nullable=True)  # JSON-serialized metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Evidence(Base):
+    __tablename__ = "evidence"
+
+    evidence_id = Column(Integer, primary_key=True, index=True)
+    source_type = Column(String, nullable=False)  # e.g., video, transcript, image, slide, quiz, discussion
+    source_id = Column(Integer, nullable=True)  # id in the source table when applicable
+    segment_id = Column(Integer, nullable=True)  # e.g., transcript segment id
+    start_time = Column(Float, nullable=True)
+    end_time = Column(Float, nullable=True)
+    snippet_text = Column(Text, nullable=True)
+    source_uri = Column(Text, nullable=True)
+    embedding_id = Column(String, nullable=True)
+    metadata = Column(Text, nullable=True)  # JSON-serialized metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Insight(Base):
+    __tablename__ = "insights"
+
+    insight_id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=True)
+    summary = Column(Text, nullable=False)
+    generated_by_model_id = Column(Integer, ForeignKey("ai_models.model_id"), nullable=True)
+    created_by = Column(Integer, ForeignKey("users.user_id"), nullable=True)
+    status = Column(String, default="pending_review")  # pending_review, approved, rejected
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class InsightEvidence(Base):
+    __tablename__ = "insight_evidence"
+
+    id = Column(Integer, primary_key=True, index=True)
+    insight_id = Column(Integer, ForeignKey("insights.insight_id"), nullable=False)
+    evidence_id = Column(Integer, ForeignKey("evidence.evidence_id"), nullable=False)
+    retrieval_id = Column(Integer, ForeignKey("retrieval_records.retrieval_id"), nullable=True)
+    score = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
