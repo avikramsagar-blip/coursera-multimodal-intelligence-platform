@@ -22,6 +22,7 @@ from backend.rag import search_chunks
 from backend.vector_store import create_vector_store
 from backend.models import CourseChatHistory
 from backend.metrics_utils import record_generation_metric
+from backend.eval_api import evaluate_faithfulness, evaluate_retrieval_recall
 from backend.schemas import (
     CourseChatRequest,
     CourseChatResponse
@@ -2281,6 +2282,36 @@ CURRENT QUESTION:
         )
 
     # ---------------------------------
+    # Evaluate answer (Faithfulness & Retrieval Recall) using Gemini as judge
+    # ---------------------------------
+    try:
+        # Retrieval recall judge: pass the retrieved docs and question
+        retrieval_eval = evaluate_retrieval_recall(docs, request.question)
+        if not isinstance(retrieval_eval, dict):
+            retrieval_eval = {"score": None, "reason": "Evaluation unavailable"}
+    except Exception:
+        retrieval_eval = {"score": None, "reason": "Evaluation unavailable"}
+
+    try:
+        # Faithfulness judge: pass the generated answer and the retrieved context string
+        faith_eval = evaluate_faithfulness(response.text, context, request.question)
+        if not isinstance(faith_eval, dict):
+            faith_eval = {"score": None, "reason": "Evaluation unavailable"}
+    except Exception:
+        faith_eval = {"score": None, "reason": "Evaluation unavailable"}
+
+    evaluation = {
+        "retrieval_recall": {
+            "score": retrieval_eval.get("score") if retrieval_eval else None,
+            "reason": retrieval_eval.get("reason") if retrieval_eval else "Evaluation unavailable"
+        },
+        "faithfulness": {
+            "score": faith_eval.get("score") if faith_eval else None,
+            "reason": faith_eval.get("reason") if faith_eval else "Evaluation unavailable"
+        }
+    }
+
+    # ---------------------------------
     # Save Chat History
     # ---------------------------------
     chat = CourseChatHistory(
@@ -2336,6 +2367,7 @@ CURRENT QUESTION:
     # ---------------------------------
     return {
         "answer": response.text,
+        "evaluation": evaluation,
         "chunks_used": len(docs),
         "evidence": evidence
     }

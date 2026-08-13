@@ -178,10 +178,9 @@ function AITutor() {
         {
           role: "assistant",
           text: response.data.answer,
-          evidence:
-            response.data.evidence || [],
-          chunksUsed:
-            response.data.chunks_used || 0,
+          evidence: response.data.evidence || [],
+          chunksUsed: response.data.chunks_used || 0,
+          evaluation: response.data.evaluation || null,
         },
       ]);
     } catch (err) {
@@ -209,6 +208,7 @@ function AITutor() {
             "Failed to get AI response.",
           evidence: [],
           chunksUsed: 0,
+          evaluation: null,
         },
       ]);
     } finally {
@@ -847,7 +847,26 @@ function AITutor() {
                     </Paper>
                   )}
 
-              </Box>
+                        {/* Evaluation Metrics */}
+                        {msg.role === "assistant" && msg.evaluation && (
+                          <Box sx={{ mt: 1, ml: 7 }}>
+                            <Typography variant="subtitle2" fontWeight="bold">
+                              Faithfulness: {msg.evaluation.faithfulness?.score ?? "—"}/100
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {msg.evaluation.faithfulness?.reason ?? ""}
+                            </Typography>
+
+                            <Typography variant="subtitle2" fontWeight="bold" sx={{ mt: 1 }}>
+                              Retrieval Recall: {msg.evaluation.retrieval_recall?.score ?? "—"}/100
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {msg.evaluation.retrieval_recall?.reason ?? ""}
+                            </Typography>
+                          </Box>
+                        )}
+
+                      </Box>
             )
           )}
 
