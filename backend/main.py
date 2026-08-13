@@ -7,6 +7,7 @@ from typing import List
 from dotenv import load_dotenv
 from google import genai
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 import os
 import time
 import cloudinary
@@ -157,7 +158,7 @@ def startup_checks():
     try:
         # engine is imported earlier from backend.database
         with engine.connect() as conn:
-            conn.execute("SELECT 1")
+            conn.execute(text("SELECT 1"))
         print("Database: connected")
     except Exception as e:
         print("Database: connection failed")
@@ -257,7 +258,7 @@ def health():
     # Database check
     try:
         with engine.connect() as conn:
-            conn.execute("SELECT 1")
+            conn.execute(text("SELECT 1"))
         status["database"] = "connected"
     except Exception as e:
         status["database"] = f"error: {str(e)}"
