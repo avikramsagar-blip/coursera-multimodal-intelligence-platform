@@ -1,4 +1,4 @@
-from video_transcription import transcribe_video
+from backend.video_transcription import transcribe_video
 
 
 video_path = r"G:\Sumit\2019-05-30-164531046.mp4"

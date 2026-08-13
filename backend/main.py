@@ -1,9 +1,14 @@
-from security import hash_password
-from fastapi import FastAPI, Depends, HTTPException
+from backend.security import hash_password
+from fastapi import BackgroundTasks, FastAPI, Depends, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from typing import List
 from dotenv import load_dotenv
 from google import genai
+from sqlalchemy.orm import Session
 import os
+import time
 import cloudinary
 import cloudinary.uploader
 import whisper
@@ -11,30 +16,23 @@ import yt_dlp
 import uuid
 import subprocess
 import json
-from rag import search_chunks
-from vector_store import create_vector_store
-from sqlalchemy.orm import Session
-from models import CourseChatHistory
-from fastapi.middleware.cors import CORSMiddleware
-import time
-from metrics_utils import record_generation_metric
-from schemas import (
+
+from backend.rag import search_chunks
+from backend.vector_store import create_vector_store
+from backend.models import CourseChatHistory
+from backend.metrics_utils import record_generation_metric
+from backend.schemas import (
     CourseChatRequest,
     CourseChatResponse
 )
-from fastapi.staticfiles import StaticFiles
-from fastapi import UploadFile, File, Form,BackgroundTasks
-from typing import List
+from backend.models import CourseMaterial
+from backend.schemas import CourseMaterialResponse
+from backend.video_transcription import transcribe_video
+from backend.models import User, Course, Enrollment, CourseVideo, CourseMaterial, CourseAudio, CourseImage, VideoTranscript, VideoTranscriptSegment
+from backend.schemas import VideoCreate, VideoResponse
+from backend.text_splitter import split_text
 
-from models import CourseMaterial
-from schemas import CourseMaterialResponse
-from video_transcription import transcribe_video
-from models import User, Course, Enrollment, CourseVideo,CourseMaterial,CourseAudio,CourseImage,VideoTranscript,VideoTranscriptSegment
-from schemas import VideoCreate, VideoResponse
-
-from text_splitter import split_text
-
-from schemas import (
+from backend.schemas import (
     UserCreate,
     UserResponse,
     UserUpdate,
@@ -48,16 +46,16 @@ from schemas import (
     ProgressUpdate
 )
 from langchain_core.documents import Document
-from security import (
+from backend.security import (
     hash_password,
     verify_password,
     create_access_token
 )
 
-from pdf_utils import extract_pdf_text
+from backend.pdf_utils import extract_pdf_text
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from security import verify_access_token
-from models import Course
+from backend.security import  verify_access_token
+from backend.models import Course
 from backend.database import engine, Base, get_db
 
 Base.metadata.create_all(bind=engine)
@@ -95,7 +93,7 @@ app = FastAPI()
 
 # Include evidence traceability API
 try:
-    from evidence_api import router as evidence_router
+    from backend.evidence_api import router as evidence_router
     app.include_router(evidence_router, prefix="/api")
 except Exception as _e:
     # If evidence_api cannot be imported (e.g., during initial setup), log and continue
@@ -103,14 +101,14 @@ except Exception as _e:
 
 # Include metrics API
 try:
-    from metrics_api import router as metrics_router
+    from backend.metrics_api import router as metrics_router
     app.include_router(metrics_router, prefix="/api")
 except Exception as _e:
     print(f"metrics_api import failed: {_e}")
 
 # Include admin API (role management, admin-only)
 try:
-    from admin_api import router as admin_router
+    from backend.admin_api import router as admin_router
     app.include_router(admin_router, prefix="/api")
 except Exception as _e:
     print(f"admin_api import failed: {_e}")
@@ -190,7 +188,7 @@ def chat(request: ChatRequest):
 
         # Extract token usage if available
         try:
-            from metrics_utils import extract_token_usage
+            from backend.metrics_utils import extract_token_usage
             tokens_in, tokens_out = extract_token_usage(response)
         except Exception:
             tokens_in, tokens_out = None, None
@@ -913,7 +911,7 @@ def course_chat(
 
         # Extract token usage if available
         try:
-            from metrics_utils import extract_token_usage
+            from backend.metrics_utils import extract_token_usage
             tokens_in, tokens_out = extract_token_usage(response)
         except Exception:
             tokens_in, tokens_out = None, None
@@ -2116,7 +2114,7 @@ CURRENT QUESTION:
 
         # Extract token usage if available
         try:
-            from metrics_utils import extract_token_usage
+            from backend.metrics_utils import extract_token_usage
             tokens_in, tokens_out = extract_token_usage(response)
         except Exception:
             tokens_in, tokens_out = None, None
