@@ -58,7 +58,7 @@ from pdf_utils import extract_pdf_text
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from security import verify_access_token
 from models import Course
-from database import engine, Base, get_db
+from backend.database import engine, Base, get_db
 
 Base.metadata.create_all(bind=engine)
 
@@ -1169,7 +1169,7 @@ def process_video_transcription(
     # Create an independent session owned entirely by this
     # background task. The request-scoped session is closed
     # by FastAPI before this task runs, so we must not reuse it.
-    from database import SessionLocal
+    from backend.database import SessionLocal
     db = SessionLocal()
 
     try:
