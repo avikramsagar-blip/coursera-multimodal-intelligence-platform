@@ -9,6 +9,61 @@ REDACT_PROMPT = os.getenv("METRICS_REDACT_PROMPT", "true").lower() in ("1", "tru
 
 # Utility to record generation metrics using an independent DB session
 # Accepts raw_prompt for hashing/redaction and maintains backward-compatible prompt_snippet
+def extract_token_usage(response) -> tuple[int|None, int|None]:
+    """Try multiple response fields to extract prompt and completion token counts.
+
+    Returns (tokens_in, tokens_out) where either value may be None if not available.
+    """
+    if response is None:
+        return None, None
+
+    # Common locations
+    possible = []
+    try:
+        if hasattr(response, "token_usage"):
+            possible.append(response.token_usage)
+    except Exception:
+        pass
+    try:
+        if hasattr(response, "usage"):
+            possible.append(response.usage)
+    except Exception:
+        pass
+    try:
+        # google genai sometimes stores metadata dict
+        if hasattr(response, "metadata") and isinstance(response.metadata, dict):
+            possible.append(response.metadata.get("token_usage") or response.metadata.get("usage") or response.metadata)
+    except Exception:
+        pass
+    try:
+        if hasattr(response, "candidates") and isinstance(response.candidates, (list, tuple)) and len(response.candidates) > 0:
+            cand = response.candidates[0]
+            if hasattr(cand, "metadata") and isinstance(cand.metadata, dict):
+                possible.append(cand.metadata.get("token_usage") or cand.metadata.get("usage"))
+    except Exception:
+        pass
+
+    for p in possible:
+        if not p:
+            continue
+        # p may be a dict-like object
+        try:
+            # dict-like access
+            if isinstance(p, dict):
+                # try common keys
+                prompt_tokens = p.get("prompt_tokens") or p.get("prompt") or p.get("input_tokens")
+                completion_tokens = p.get("completion_tokens") or p.get("generated_tokens") or p.get("completion")
+                total_tokens = p.get("total_tokens") or p.get("tokens")
+                if prompt_tokens is not None or completion_tokens is not None:
+                    return (int(prompt_tokens) if prompt_tokens is not None else None,
+                            int(completion_tokens) if completion_tokens is not None else None)
+                if total_tokens is not None:
+                    return (None, int(total_tokens))
+        except Exception:
+            pass
+    return None, None
+
+
 def record_generation_metric(
     model_name: str,
     raw_prompt: str | None = None,

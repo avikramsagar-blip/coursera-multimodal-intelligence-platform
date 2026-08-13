@@ -181,13 +181,22 @@ def chat(request: ChatRequest):
         )
         latency_ms = (time.time() - start_ts) * 1000.0
 
+        # Extract token usage if available
+        try:
+            from metrics_utils import extract_token_usage
+            tokens_in, tokens_out = extract_token_usage(response)
+        except Exception:
+            tokens_in, tokens_out = None, None
+
         # Record metric (best-effort)
         try:
             record_generation_metric(
-                model_name="gemini-3.6-flash",
+                            model_name="gemini-3.6-flash",
                             raw_prompt=(request.message if hasattr(request, 'message') else None),
-                latency_ms=latency_ms,
-                success=True
+                            tokens_in=tokens_in,
+                            tokens_out=tokens_out,
+                            latency_ms=latency_ms,
+                            success=True
             )
         except Exception:
             pass
@@ -895,13 +904,22 @@ def course_chat(
         )
         latency_ms = (time.time() - start_ts) * 1000.0
 
+        # Extract token usage if available
+        try:
+            from metrics_utils import extract_token_usage
+            tokens_in, tokens_out = extract_token_usage(response)
+        except Exception:
+            tokens_in, tokens_out = None, None
+
         # best-effort metric record
         try:
             record_generation_metric(
-                model_name="gemini-3.6-flash",
+                            model_name="gemini-3.6-flash",
                             raw_prompt=(request.question if hasattr(request, 'question') else None),
-                latency_ms=latency_ms,
-                success=True
+                            tokens_in=tokens_in,
+                            tokens_out=tokens_out,
+                            latency_ms=latency_ms,
+                            success=True
             )
         except Exception:
             pass
@@ -2089,15 +2107,24 @@ CURRENT QUESTION:
             print(f"Warning: failed to create insight/evidence links: {e}")
             insight_id = None
 
+        # Extract token usage if available
+        try:
+            from metrics_utils import extract_token_usage
+            tokens_in, tokens_out = extract_token_usage(response)
+        except Exception:
+            tokens_in, tokens_out = None, None
+
         # record metric (with retrieval_id and insight_id)
         try:
             record_generation_metric(
-                model_name="gemini-3.6-flash",
+                            model_name="gemini-3.6-flash",
                             raw_prompt=(prompt if prompt is not None else None),
-                latency_ms=latency_ms,
-                success=True,
-                retrieval_id=retrieval_id,
-                insight_id=insight_id
+                            tokens_in=tokens_in,
+                            tokens_out=tokens_out,
+                            latency_ms=latency_ms,
+                            success=True,
+                            retrieval_id=retrieval_id,
+                            insight_id=insight_id
             )
         except Exception:
             pass
