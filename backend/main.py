@@ -227,7 +227,7 @@ def startup_checks():
                 full_name="Demo User",
                 email=demo_email,
                 password=hash_password(demo_password),
-                role="student"
+                role="admin"
             )
             db.add(demo_user)
             db.commit()

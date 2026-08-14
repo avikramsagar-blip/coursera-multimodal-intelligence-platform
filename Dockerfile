@@ -13,14 +13,22 @@ RUN apt-get update \
         ffmpeg \
         build-essential \
         libpq-dev \
+        curl \
+        ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt /tmp/requirements.txt
-RUN pip install --upgrade pip \
+RUN python -m pip install --upgrade pip setuptools wheel \
     && pip install -r /tmp/requirements.txt
 
-COPY . /app
+# Copy only the backend source (reduces build context and image size)
+COPY backend/ /app/backend
+WORKDIR /app
+ENV PYTHONPATH=/app
 
 EXPOSE 8000
 
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Add a basic healthcheck for container orchestrators (requires curl installed above)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 CMD curl -f http://localhost:8000/health || exit 1
+
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
