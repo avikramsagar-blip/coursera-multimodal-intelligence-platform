@@ -7,10 +7,22 @@ from sqlalchemy.pool import StaticPool
 # Load environment variables
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 
-# Database URL (fall back to a local sqlite dev DB when not set)
-DATABASE_URL = os.getenv("DATABASE_URL") or "sqlite:///./dev.db"
 
-engine_kwargs = {}
+def _resolve_database_url() -> str:
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        return database_url
+
+    if os.getenv("APP_ENV", "production").lower() == "production":
+        raise RuntimeError("DATABASE_URL must be set in production environments.")
+
+    return "sqlite:///./dev.db"
+
+
+# PostgreSQL-first production configuration. SQLite remains allowed only for local development.
+DATABASE_URL = _resolve_database_url()
+
+engine_kwargs = {"pool_pre_ping": True}
 if DATABASE_URL.startswith("sqlite"):
     engine_kwargs["connect_args"] = {"check_same_thread": False}
     if DATABASE_URL in {"sqlite://", "sqlite:///:memory:"}:
@@ -28,6 +40,7 @@ SessionLocal = sessionmaker(
 
 # Base class for all models
 Base = declarative_base()
+
 
 # Dependency to get DB session
 def get_db():

@@ -1,27 +1,24 @@
 import os
+
 from dotenv import load_dotenv
-from langchain_google_genai import (
-    GoogleGenerativeAIEmbeddings
-)
-from langchain_community.vectorstores import FAISS
 from fastapi import HTTPException
-load_dotenv()
+from langchain_core.documents import Document
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
+
 BASE_DIR = os.path.dirname(__file__)
 embeddings = GoogleGenerativeAIEmbeddings(
     model="gemini-embedding-001",
     google_api_key=os.getenv("GEMINI_API_KEY")
 )
 
+
 def search_chunks(course_id, question, k=10):
+    from backend.vector_store import client, _collection_name
 
-    folder = os.path.join(
-        BASE_DIR,
-        "faiss_indexes",
-        f"course_{course_id}"
-    )
-
-    if not os.path.exists(folder):
-        # Graceful HTTP error to surface a user-friendly message
+    collection_name = _collection_name(course_id)
+    if not client.collection_exists(collection_name=collection_name):
         raise HTTPException(
             status_code=404,
             detail=(
@@ -30,46 +27,25 @@ def search_chunks(course_id, question, k=10):
             )
         )
 
-    db = FAISS.load_local(
-        folder,
-        embeddings,
-        allow_dangerous_deserialization=True
+    query_vector = embeddings.embed_query(question)
+    hits = client.search(
+        collection_name=collection_name,
+        query_vector=query_vector,
+        limit=k,
+        with_payload=True,
+        with_vectors=False,
     )
 
-    docs = db.similarity_search(
-        query=question,
-        k=k
-    )
-
-    print("=== RAG RETRIEVAL DEBUG ===")
-    print(
-        f"similarity_search returned: {len(docs)} docs"
-    )
-
-    for i, doc in enumerate(docs):
-
-        print(f"\nEvidence {i + 1}")
-
-        print(
-            f"Source: "
-            f"{doc.metadata.get('source', 'Unknown')}"
+    docs = []
+    for hit in hits:
+        payload = hit.payload or {}
+        docs.append(
+            Document(
+                page_content=payload.get("text", ""),
+                metadata={
+                    key: value for key, value in payload.items() if key != "text"
+                },
+            )
         )
-
-        print(
-            f"Page: "
-            f"{doc.metadata.get('page', 'Unknown')}"
-        )
-
-        print(
-            f"Chunk: "
-            f"{doc.metadata.get('chunk', 'Unknown')}"
-        )
-
-        print(
-            f"Content: "
-            f"{doc.page_content[:300]}"
-        )
-
-    print("=== END RAG RETRIEVAL DEBUG ===")
 
     return docs

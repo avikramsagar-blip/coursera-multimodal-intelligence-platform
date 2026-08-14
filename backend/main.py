@@ -1,6 +1,7 @@
 from backend.security import hash_password
 from fastapi import BackgroundTasks, FastAPI, Depends, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List
@@ -18,6 +19,8 @@ import uuid
 import subprocess
 import json
 import traceback
+import tempfile
+from urllib.request import urlopen
 
 from backend.rag import search_chunks
 from backend.vector_store import create_vector_store
@@ -57,9 +60,10 @@ from backend.security import (
 
 from backend.pdf_utils import extract_pdf_text
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from backend.security import  verify_access_token
+from backend.security import verify_access_token, validate_jwt_secret
 from backend.models import Course
-from backend.database import engine, Base, get_db, SessionLocal
+from backend.database import DATABASE_URL, engine, Base, get_db, SessionLocal
+from backend.storage_service import storage_service
 
 Base.metadata.create_all(bind=engine)
 
@@ -69,6 +73,7 @@ security = HTTPBearer()
 # Load Environment Variables
 # -----------------------------
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
+validate_jwt_secret()
 
 # -----------------------------
 # Gemini Client
@@ -81,25 +86,23 @@ client = genai.Client(api_key=api_key)
 # -----------------------------
 # Cloudinary Configuration
 # -----------------------------
-
 cloudinary.config(
-    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
-    api_key=os.getenv("CLOUDINARY_API_KEY"),
-    api_secret=os.getenv("CLOUDINARY_API_SECRET"),
-    secure=True
+cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+api_key=os.getenv("CLOUDINARY_API_KEY"),
+api_secret=os.getenv("CLOUDINARY_API_SECRET"),
+secure=True
 )
 
 # -----------------------------
 # FastAPI App
 # -----------------------------
-app = FastAPI()
+app = FastAPI(title="Multimodal Intelligence Platform", version="1.0.0")
 
 # Include evidence traceability API
 try:
     from backend.evidence_api import router as evidence_router
     app.include_router(evidence_router, prefix="/api")
 except Exception as _e:
-    # If evidence_api cannot be imported (e.g., during initial setup), log and continue
     print(f"evidence_api import failed: {_e}")
 
 # Include metrics API
@@ -115,36 +118,46 @@ try:
     app.include_router(admin_router, prefix="/api")
 except Exception as _e:
     print(f"admin_api import failed: {_e}")
-UPLOAD_DIR = os.path.join(
-    os.path.dirname(__file__),
-    "uploads"
-)
 
-os.makedirs(
-UPLOAD_DIR,
-exist_ok=True
-)
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-app.mount(
-    "/uploads",
-    StaticFiles(
-        directory=UPLOAD_DIR
-    ),
-    name="uploads"
-)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+cors_origins = [
+origin.strip()
+for origin in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+if origin.strip()
+]
 
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "https://coursera-multimodal-intelligence-platform-6wvy.onrender.com",
-    "https://coursera-multimodal-intelligence.onrender.com",
-],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+CORSMiddleware,
+allow_origins=cors_origins,
+allow_credentials=True,
+allow_methods=["*"],
+allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def security_middleware(request, call_next):
+    max_request_size = int(os.getenv("MAX_REQUEST_SIZE_BYTES", "10485760"))
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            if int(content_length) > max_request_size:
+                return JSONResponse(status_code=413, content={"detail": "Request too large."})
+        except ValueError:
+            pass
+
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+    if request.url.scheme == "https":
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
 
 
 # -----------------------------
@@ -248,40 +261,49 @@ def home():
 
 @app.get('/health')
 def health():
-    """Health endpoint reporting database connection and RAG/vector-store status."""
+    """Health endpoint reporting database, vector store, storage, and AI dependencies."""
     status = {
         "status": "healthy",
-        "database": "unknown",
-        "rag": "unknown"
+        "checks": {
+            "database": {"status": "unknown"},
+            "vector_store": {"status": "unknown"},
+            "storage": {"status": "unknown"},
+            "gemini": {"status": "unknown"},
+        }
     }
 
-    # Database check
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        status["database"] = "connected"
-    except Exception as e:
-        status["database"] = f"error: {str(e)}"
+        status["checks"]["database"] = {"status": "ok", "provider": "postgresql" if not str(DATABASE_URL).startswith("sqlite") else "sqlite"}
+    except Exception as exc:
+        status["checks"]["database"] = {"status": "error", "detail": str(exc)}
         status["status"] = "unhealthy"
 
-    # RAG / FAISS check - check faiss_indexes directory existence
-    faiss_root = os.path.join(os.path.dirname(__file__), "faiss_indexes")
-    if os.path.exists(faiss_root):
-        # Determine if any course indexes exist
-        subdirs = [d for d in os.listdir(faiss_root) if os.path.isdir(os.path.join(faiss_root, d))]
-        if len(subdirs) > 0:
-            status["rag"] = "ready"
-        else:
-            status["rag"] = "no_indexes_found"
-            # not unhealthy; indexing may be pending
-    else:
-        status["rag"] = "faiss_directory_missing"
+    try:
+        from backend.vector_store import client, _collection_name
+        collection_name = _collection_name(1)
+        status["checks"]["vector_store"] = {
+            "status": "ok" if client is not None else "warn",
+            "url": os.getenv("QDRANT_URL", "http://localhost:6333"),
+            "collection": collection_name,
+        }
+    except Exception as exc:
+        status["checks"]["vector_store"] = {"status": "error", "detail": str(exc)}
+        status["status"] = "unhealthy"
 
-    # Gemini API key presence
+    try:
+        storage_service.client
+        status["checks"]["storage"] = {"status": "ok", "provider": os.getenv("OBJECT_STORAGE_PROVIDER", "s3")}
+    except Exception as exc:
+        status["checks"]["storage"] = {"status": "error", "detail": str(exc)}
+        status["status"] = "unhealthy"
+
     if os.getenv("GEMINI_API_KEY"):
-        status["gemini_api_key"] = "present"
+        status["checks"]["gemini"] = {"status": "ok", "provider": "google-gemini"}
     else:
-        status["gemini_api_key"] = "missing"
+        status["checks"]["gemini"] = {"status": "missing", "detail": "GEMINI_API_KEY not configured"}
+        status["status"] = "degraded"
 
     return status
 
@@ -1181,50 +1203,26 @@ async def upload_course_material(
                 )
 
             # ---------------------------------
-            # Create File Path
+            # Upload to object storage instead of local filesystem
             # ---------------------------------
-
-            file_path = os.path.join(
-                UPLOAD_DIR,
-                file.filename
+            safe_name = file.filename
+            object_key = f"course_{course_id}/materials/{uuid.uuid4().hex}_{safe_name}"
+            remote_url = storage_service.upload_bytes(
+                file_name=object_key,
+                content=content,
+                folder=f"course_{course_id}/materials",
+                content_type="application/pdf",
             )
 
-            print(
-                f"File path: {file_path}"
-            )
-
-            # ---------------------------------
-            # Save File
-            # ---------------------------------
-
-            with open(
-                file_path,
-                "wb"
-            ) as buffer:
-
-                buffer.write(content)
-
-
-            print(
-                f"File exists: "
-                f"{os.path.exists(file_path)}"
-            )
-
-            print(
-                f"File size: "
-                f"{os.path.getsize(file_path)}"
-            )
+            print(f"Remote object URL: {remote_url}")
 
             # ---------------------------------
             # Save Database Record
-            # Store only the filename so the record is not
-            # tied to an absolute path on this machine.
             # ---------------------------------
-
             material = CourseMaterial(
                 course_id=course_id,
                 file_name=file.filename,
-                file_path=file.filename
+                file_path=remote_url
             )
 
             db.add(material)
@@ -1423,72 +1421,32 @@ async def upload_course_video(
         )
 
     # ---------------------------------
-    # Create Video Upload Directory
+    # Persist a temp local copy for ffprobe/Whisper processing
     # ---------------------------------
-
-    video_upload_dir = os.path.join(
-        os.path.dirname(__file__),
-        "uploads",
-        "videos"
-    )
-
-    os.makedirs(
-        video_upload_dir,
-        exist_ok=True
-    )
-
-    # ---------------------------------
-    # Create Unique File Name
-    # ---------------------------------
-
-    unique_name = (
-        f"{uuid.uuid4().hex}"
-        f"{extension}"
-    )
-
-    file_path = os.path.join(
-        video_upload_dir,
-        unique_name
-    )
-
-    # ---------------------------------
-    # Save Video File
-    # ---------------------------------
-
     content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Video file is empty.")
 
+    with tempfile.NamedTemporaryFile(delete=False, suffix=extension) as tmp_file:
+        tmp_file.write(content)
+        tmp_file_path = tmp_file.name
+
+    unique_name = f"{uuid.uuid4().hex}{extension}"
     print("=== VIDEO UPLOAD DEBUG ===")
     print(f"Course ID: {course_id}")
     print(f"Original filename: {file.filename}")
     print(f"Saved filename: {unique_name}")
     print(f"Content length: {len(content)}")
-    print(f"File path: {file_path}")
 
-    with open(file_path, "wb") as buffer:
-        buffer.write(content)
-
-    # ---------------------------------
-    # Upload Video to Cloudinary
-    # ---------------------------------
-
-    print("=== CLOUDINARY VIDEO UPLOAD ===")
-
-    cloudinary_result = cloudinary.uploader.upload(
-        file_path,
-        resource_type="video",
-        folder="coursera/course_videos"
+    remote_url = storage_service.upload_bytes(
+        file_name=unique_name,
+        content=content,
+        folder=f"course_{course_id}/videos",
+        content_type="video/mp4" if extension == ".mp4" else "application/octet-stream",
     )
 
-    video_url = cloudinary_result["secure_url"]
-
-    print(f"Cloudinary URL: {video_url}")
-    print("=== END CLOUDINARY VIDEO UPLOAD ===")
-
-    print(
-        f"File exists: "
-        f"{os.path.exists(file_path)}"
-    )
-
+    video_url = remote_url
+    print(f"Remote video URL: {video_url}")
     print("=== END VIDEO UPLOAD DEBUG ===")
 
     # ---------------------------------
@@ -1497,9 +1455,7 @@ async def upload_course_video(
 
     print("=== VIDEO DURATION DETECTION ===")
 
-    duration = get_video_duration(
-        file_path
-    )
+    duration = get_video_duration(tmp_file_path)
 
     if duration is None:
         raise HTTPException(
@@ -1546,7 +1502,7 @@ async def upload_course_video(
     background_tasks.add_task(
         process_video_transcription,
         new_video.video_id,
-        file_path
+        tmp_file_path
     )
 
     print(
@@ -1595,14 +1551,13 @@ def delete_course_material(
             detail="Course material not found"
         )
 
-    # Delete physical PDF
-    file_path = os.path.join(
-        UPLOAD_DIR,
-        material.file_path
-    )
-
-    if os.path.exists(file_path):
-        os.remove(file_path)
+    # Delete remote PDF object
+    try:
+        object_key = material.file_path.replace(str(os.getenv("AWS_S3_PUBLIC_URL", "")), "").lstrip("/")
+        if object_key and object_key != material.file_path:
+            storage_service.delete(object_key)
+    except Exception:
+        pass
 
     # Delete database record
     db.delete(material)
@@ -1663,10 +1618,14 @@ def generate_vector_db(
         file_path = material.file_path
 
         # Backward-compatible path resolution:
-        # - Old records: file_path is an absolute path → use as-is.
-        # - New records: file_path is a filename only → join with UPLOAD_DIR.
-        if not os.path.isabs(file_path):
-
+        # - Old records: file_path is a local filename → join with UPLOAD_DIR.
+        # - New records: file_path is a remote object URL → download to a temp file.
+        if str(file_path).startswith(("http://", "https://")):
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                with urlopen(file_path) as response:
+                    tmp_file.write(response.read())
+                file_path = tmp_file.name
+        elif not os.path.isabs(file_path):
             file_path = os.path.join(
                 UPLOAD_DIR,
                 file_path
@@ -2453,27 +2412,6 @@ async def upload_course_audio(
             )
         )
 
-    audio_upload_dir = os.path.join(
-        os.path.dirname(__file__),
-        "uploads",
-        "audio"
-    )
-
-    os.makedirs(
-        audio_upload_dir,
-        exist_ok=True
-    )
-
-    unique_name = (
-        f"{uuid.uuid4().hex}"
-        f"{extension}"
-    )
-
-    file_path = os.path.join(
-        audio_upload_dir,
-        unique_name
-    )
-
     content = await file.read()
 
     if not content:
@@ -2482,23 +2420,19 @@ async def upload_course_audio(
             detail="Audio file is empty."
         )
 
-    with open(file_path, "wb") as buffer:
-        buffer.write(content)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=extension) as tmp_file:
+        tmp_file.write(content)
+        tmp_file_path = tmp_file.name
 
-    print("=== CLOUDINARY AUDIO UPLOAD ===")
-
-    cloudinary_result = cloudinary.uploader.upload(
-        file_path,
-        resource_type="video",
-        folder="coursera/course_audios"
+    unique_name = f"{uuid.uuid4().hex}{extension}"
+    audio_url = storage_service.upload_bytes(
+        file_name=unique_name,
+        content=content,
+        folder=f"course_{course_id}/audio",
+        content_type="audio/mpeg" if extension in {".mp3"} else "application/octet-stream",
     )
 
-    audio_url = cloudinary_result["secure_url"]
-
-    print(f"Cloudinary Audio URL: {audio_url}")
-    print("=== END CLOUDINARY AUDIO UPLOAD ===")
-
-    duration = get_video_duration(file_path)
+    duration = get_video_duration(tmp_file_path)
 
     new_audio = CourseAudio(
         course_id=course_id,
@@ -2565,27 +2499,6 @@ async def upload_course_image(
             )
         )
 
-    image_upload_dir = os.path.join(
-        os.path.dirname(__file__),
-        "uploads",
-        "images"
-    )
-
-    os.makedirs(
-        image_upload_dir,
-        exist_ok=True
-    )
-
-    unique_name = (
-        f"{uuid.uuid4().hex}"
-        f"{extension}"
-    )
-
-    file_path = os.path.join(
-        image_upload_dir,
-        unique_name
-    )
-
     content = await file.read()
 
     if not content:
@@ -2594,21 +2507,13 @@ async def upload_course_image(
             detail="Image file is empty."
         )
 
-    with open(file_path, "wb") as buffer:
-        buffer.write(content)
-
-    print("=== CLOUDINARY IMAGE UPLOAD ===")
-
-    cloudinary_result = cloudinary.uploader.upload(
-        file_path,
-        resource_type="image",
-        folder="coursera/course_images"
+    unique_name = f"{uuid.uuid4().hex}{extension}"
+    image_url = storage_service.upload_bytes(
+        file_name=unique_name,
+        content=content,
+        folder=f"course_{course_id}/images",
+        content_type="image/jpeg" if extension in {".jpg", ".jpeg"} else "image/png" if extension == ".png" else "image/webp" if extension == ".webp" else "image/gif" if extension == ".gif" else "application/octet-stream",
     )
-
-    image_url = cloudinary_result["secure_url"]
-
-    print(f"Cloudinary Image URL: {image_url}")
-    print("=== END CLOUDINARY IMAGE UPLOAD ===")
 
     new_image = CourseImage(
         course_id=course_id,

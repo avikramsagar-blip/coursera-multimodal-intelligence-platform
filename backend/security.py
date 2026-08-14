@@ -9,11 +9,25 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-SECRET_KEY = os.getenv("SECRET_KEY") or "dev-secret-key-for-local-development"
+SECRET_KEY = os.getenv("JWT_SECRET_KEY") or os.getenv("SECRET_KEY") or "dev-secret-key-for-local-development"
+os.environ.setdefault("JWT_SECRET_KEY", SECRET_KEY)
 os.environ.setdefault("SECRET_KEY", SECRET_KEY)
 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+
+
+def validate_jwt_secret(secret: str = None) -> str:
+    candidate = secret or SECRET_KEY
+    if candidate is None or len(candidate) < 32:
+        if os.getenv("APP_ENV", "development").lower() == "production":
+            raise ValueError("JWT_SECRET_KEY must be set to a secure value of at least 32 characters in production.")
+        return candidate or "dev-secret-key-for-local-development"
+    return candidate
+
+
+validate_jwt_secret()
+SECRET_KEY = validate_jwt_secret()
 
 
 def hash_password(password: str):
