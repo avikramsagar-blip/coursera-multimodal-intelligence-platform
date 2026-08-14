@@ -133,12 +133,14 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 FRONTEND_DIST = os.getenv("FRONTEND_DIST", "/app/frontend_dist")
 
 if os.path.isdir(FRONTEND_DIST):
-    # Serve static assets (Vite outputs into dist/assets)
+    # Serve static assets (Vite outputs into dist/assets).
+    # StaticFiles mounts are safe here — they are matched by Starlette's Mount
+    # router separately and do NOT shadow path-operation routes.
     assets_dir = os.path.join(FRONTEND_DIST, "assets")
     if os.path.isdir(assets_dir):
         app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
-    # Serve other static files like favicon, robots.txt directly from dist
+    # Serve favicon from the dist folder.
     @app.get("/favicon.ico", include_in_schema=False)
     def _favicon():
         p = os.path.join(FRONTEND_DIST, "favicon.ico")
@@ -146,25 +148,9 @@ if os.path.isdir(FRONTEND_DIST):
             return FileResponse(p)
         raise HTTPException(status_code=404)
 
-    # Serve index.html at root
-    @app.get("/", include_in_schema=False)
-    def _index():
-        index_path = os.path.join(FRONTEND_DIST, "index.html")
-        if os.path.exists(index_path):
-            return FileResponse(index_path, media_type="text/html")
-        return JSONResponse({"message": "API is running"})
-
-    # Catch-all route for React Router refreshes. Must be added after API routers are included.
-    @app.get("/{full_path:path}", include_in_schema=False)
-    def _spa(full_path: str):
-        # Let API and special routes (api/, docs, openapi, uploads, assets) 404 here so they resolve normally
-        excluded_prefixes = ("api", "docs", "openapi", "redoc", "uploads", "assets")
-        if any(full_path.startswith(p) for p in excluded_prefixes):
-            raise HTTPException(status_code=404)
-        index_path = os.path.join(FRONTEND_DIST, "index.html")
-        if os.path.exists(index_path):
-            return FileResponse(index_path, media_type="text/html")
-        raise HTTPException(status_code=404)
+# NOTE: The "/" index route and the "/{full_path:path}" SPA catch-all are
+# intentionally registered at the BOTTOM of this file (after all API routes)
+# so that FastAPI's first-match routing does not shadow any API endpoint.
 
 cors_origins = [
 origin.strip()
@@ -357,8 +343,10 @@ def health():
         status["status"] = "unhealthy"
 
     try:
-        storage_service.client
-        status["checks"]["storage"] = {"status": "ok", "provider": os.getenv("OBJECT_STORAGE_PROVIDER", "s3")}
+        provider = os.getenv("OBJECT_STORAGE_PROVIDER", "local")
+        if provider == "s3":
+            storage_service.client  # will raise if boto3 not configured
+        status["checks"]["storage"] = {"status": "ok", "provider": provider}
     except Exception as exc:
         status["checks"]["storage"] = {"status": "error", "detail": str(exc)}
         status["status"] = "unhealthy"
@@ -713,12 +701,10 @@ def create_course(
 
     return new_course
 
-
 @app.get("/courses", response_model=list[CourseResponse])
 def get_courses(
     db: Session = Depends(get_db)
 ):
-    print("GET_COURSES HIT")
     return db.query(Course).all()
 
 
@@ -1270,9 +1256,9 @@ async def upload_course_material(
             # Upload to object storage instead of local filesystem
             # ---------------------------------
             safe_name = file.filename
-            object_key = f"course_{course_id}/materials/{uuid.uuid4().hex}_{safe_name}"
+            unique_name = f"{uuid.uuid4().hex}_{safe_name}"
             remote_url = storage_service.upload_bytes(
-                file_name=object_key,
+                file_name=unique_name,
                 content=content,
                 folder=f"course_{course_id}/materials",
                 content_type="application/pdf",
@@ -1615,10 +1601,18 @@ def delete_course_material(
             detail="Course material not found"
         )
 
-    # Delete remote PDF object
+    # Delete remote/local file object
     try:
-        object_key = material.file_path.replace(str(os.getenv("AWS_S3_PUBLIC_URL", "")), "").lstrip("/")
-        if object_key and object_key != material.file_path:
+        file_path = material.file_path or ""
+        if os.getenv("OBJECT_STORAGE_PROVIDER", "local") == "local":
+            # local URL is /uploads/<object_key> — strip the mount prefix
+            object_key = file_path.lstrip("/")
+            if object_key.startswith("uploads/"):
+                object_key = object_key[len("uploads/"):]
+        else:
+            public_url = str(os.getenv("AWS_S3_PUBLIC_URL", ""))
+            object_key = file_path.replace(public_url, "").lstrip("/")
+        if object_key and object_key != file_path.lstrip("/") or os.getenv("OBJECT_STORAGE_PROVIDER", "local") == "local":
             storage_service.delete(object_key)
     except Exception:
         pass
@@ -1689,6 +1683,9 @@ def generate_vector_db(
                 with urlopen(file_path) as response:
                     tmp_file.write(response.read())
                 file_path = tmp_file.name
+        elif str(file_path).startswith("/uploads/"):
+            # Local storage: public URL → actual filesystem path via UPLOAD_DIR
+            file_path = os.path.join(UPLOAD_DIR, file_path[len("/uploads/"):])
         elif not os.path.isabs(file_path):
             file_path = os.path.join(
                 UPLOAD_DIR,
@@ -2823,29 +2820,25 @@ def transcribe_youtube_video(
                 except Exception:
                     pass
 
-@app.get("/{full_path:path}", include_in_schema=False)
-def _spa(full_path: str):
+# ---------------------------------------------------------------------------
+# SPA fallback routes — registered LAST so all API path-operations above take
+# precedence in FastAPI's first-match routing.
+# ---------------------------------------------------------------------------
 
-    print("SPA HIT:", full_path)
-
-    excluded_prefixes = (
-        "api",
-        "docs",
-        "openapi",
-        "redoc",
-        "uploads",
-        "assets",
-        "courses"
-    )
-
-    if any(full_path.startswith(p) for p in excluded_prefixes):
-        raise HTTPException(status_code=404)
-
+@app.get("/", include_in_schema=False)
+def _index():
     index_path = os.path.join(FRONTEND_DIST, "index.html")
-
     if os.path.exists(index_path):
         return FileResponse(index_path, media_type="text/html")
+    return JSONResponse({"message": "API is running"})
 
+
+@app.get("/{full_path:path}", include_in_schema=False)
+def _spa(full_path: str):
+    """Serve index.html for any unknown path so React Router can handle it."""
+    index_path = os.path.join(FRONTEND_DIST, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path, media_type="text/html")
     raise HTTPException(status_code=404)
 
 
