@@ -216,16 +216,39 @@ def startup_checks():
         from backend.models import User
         from backend.security import hash_password
 
-        demo_email = "test@test.com"
-        demo_password = "test123"
+        # Replace single demo_email/demo creation with idempotent demo_users list
+        demo_users = [
+            {
+                "email": "admin@test.com",
+                "password": "admin123",
+                "full_name": "Admin User",
+                "role": "admin",
+            },
+            {
+                "email": "test@test.com",
+                "password": "test123",
+                "full_name": "Demo User",
+                "role": "student",
+            },
+        ]
 
-        existing = db.query(User).filter(User.email == demo_email).first()
-        if existing:
-            print(f"Demo user already exists: {demo_email}")
-        else:
-            demo_user = User(
-                full_name="Demo User",
-                email=demo_email,
+        changed = False
+        for item in demo_users:
+            existing = db.query(User).filter(User.email == item["email"]).first()
+            if existing:
+                existing_role = (existing.role or "").lower()
+                desired_role = (item["role"] or "").lower()
+                if existing_role != desired_role:
+                    existing.role = item["role"]
+                    db.add(existing)
+                    changed = True
+                    print(f"Updated role for existing user {item['email']} -> {item['role']}")
+                else:
+                    print(f"Demo user already exists with correct role: {item['email']} ({existing.role})")
+            else:
+                new_user = User(
+                    full_name=item["full_name"],
+                    email=item["email"],
                 password=hash_password(demo_password),
                 role="admin"
             )
