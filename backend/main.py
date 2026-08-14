@@ -1,7 +1,7 @@
 from backend.security import hash_password
 from fastapi import BackgroundTasks, FastAPI, Depends, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List
@@ -124,6 +124,48 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
+# -----------------------------
+# Frontend static serving (single-image SPA + API)
+# - FRONTEND_DIST is copied into the image at /app/frontend_dist by the Dockerfile
+# - Serve /assets/* from the Vite build assets folder
+# - Serve index.html at / and for unknown non-API routes (support React Router)
+# -----------------------------
+FRONTEND_DIST = os.getenv("FRONTEND_DIST", "/app/frontend_dist")
+
+if os.path.isdir(FRONTEND_DIST):
+    # Serve static assets (Vite outputs into dist/assets)
+    assets_dir = os.path.join(FRONTEND_DIST, "assets")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    # Serve other static files like favicon, robots.txt directly from dist
+    @app.get("/favicon.ico", include_in_schema=False)
+    def _favicon():
+        p = os.path.join(FRONTEND_DIST, "favicon.ico")
+        if os.path.exists(p):
+            return FileResponse(p)
+        raise HTTPException(status_code=404)
+
+    # Serve index.html at root
+    @app.get("/", include_in_schema=False)
+    def _index():
+        index_path = os.path.join(FRONTEND_DIST, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path, media_type="text/html")
+        return JSONResponse({"message": "API is running"})
+
+    # Catch-all route for React Router refreshes. Must be added after API routers are included.
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def _spa(full_path: str):
+        # Let API and special routes (api/, docs, openapi, uploads, assets) 404 here so they resolve normally
+        excluded_prefixes = ("api", "docs", "openapi", "redoc", "uploads", "assets")
+        if any(full_path.startswith(p) for p in excluded_prefixes):
+            raise HTTPException(status_code=404)
+        index_path = os.path.join(FRONTEND_DIST, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path, media_type="text/html")
+        raise HTTPException(status_code=404)
+
 cors_origins = [
 origin.strip()
 for origin in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
@@ -211,52 +253,51 @@ def startup_checks():
     # ---------------------------------
     # Create demo user if missing
     # ---------------------------------
+        # ---------------------------------
+    # Ensure demo admin and student users (idempotent)
+    # - Admin: admin@test.com / admin123 (role=admin)
+    # - Student: test@test.com / test123 (role=student)
+    # Behavior:
+    # - Do not create duplicates
+    # - If user exists: keep password unchanged, update role if incorrect
+    # ---------------------------------
     try:
         db = SessionLocal()
         from backend.models import User
         from backend.security import hash_password
 
-        # Replace single demo_email/demo creation with idempotent demo_users list
-        demo_users = [
-            {
-                "email": "admin@test.com",
-                "password": "admin123",
-                "full_name": "Admin User",
-                "role": "admin",
-            },
-            {
-                "email": "test@test.com",
-                "password": "test123",
-                "full_name": "Demo User",
-                "role": "student",
-            },
+        demo_specs = [
+            {"email": "admin@test.com", "password": "admin123", "full_name": "Admin User", "role": "admin"},
+            {"email": "test@test.com",  "password": "test123",  "full_name": "Demo User",  "role": "student"},
         ]
 
-        changed = False
-        for item in demo_users:
-            existing = db.query(User).filter(User.email == item["email"]).first()
-            if existing:
-                existing_role = (existing.role or "").lower()
-                desired_role = (item["role"] or "").lower()
+        for spec in demo_specs:
+            user = db.query(User).filter(User.email == spec["email"]).first()
+            if user:
+                # Keep existing password; update role only if incorrect
+                existing_role = (user.role or "").lower()
+                desired_role = (spec["role"] or "").lower()
                 if existing_role != desired_role:
-                    existing.role = item["role"]
-                    db.add(existing)
-                    changed = True
-                    print(f"Updated role for existing user {item['email']} -> {item['role']}")
-                else:
-                    print(f"Demo user already exists with correct role: {item['email']} ({existing.role})")
+                    user.role = spec["role"]
+                    db.add(user)
+                    db.commit()
+                    print(f"Updated role for existing user {spec['email']}")
             else:
                 new_user = User(
-                    full_name=item["full_name"],
-                    email=item["email"],
-                password=hash_password(demo_password),
-                role="admin"
-            )
-            db.add(demo_user)
-            db.commit()
-            print(f"Demo user created: {demo_email}")
+                    full_name=spec["full_name"],
+                    email=spec["email"],
+                    password=hash_password(spec["password"]),
+                    role=spec["role"],
+                )
+                db.add(new_user)
+                db.commit()
+                if spec["role"] == "admin":
+                    print("Created admin user")
+                elif spec["role"] == "student":
+                    print("Created student user")
+
     except Exception as _e:
-        print(f"Warning: failed to create demo user: {_e}")
+        print(f"Warning: failed to ensure demo users: {_e}")
     finally:
         try:
             db.close()

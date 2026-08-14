@@ -1,7 +1,9 @@
 ﻿import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://127.0.0.1:8000",
+  // Use Vite environment variable VITE_API_URL in dev/preview if provided,
+  // otherwise use relative URLs so the bundled app talks to the same origin.
+  baseURL: (typeof import !== 'undefined' && import.meta && import.meta.env && import.meta.env.VITE_API_URL) ? import.meta.env.VITE_API_URL : "",
 });
 
 api.interceptors.request.use((config) => {
