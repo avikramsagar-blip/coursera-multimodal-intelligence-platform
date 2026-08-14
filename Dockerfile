@@ -8,7 +8,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 
 # Copy package files and install deps first for caching
 COPY frontend/package*.json ./
-COPY frontend/.npmrc ./ 2>/dev/null || true
 
 # Copy full frontend and build
 COPY frontend/ .

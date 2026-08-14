@@ -1,4 +1,4 @@
-from backend.security import hash_password
+﻿from backend.security import hash_password
 from fastapi import BackgroundTasks, FastAPI, Depends, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
@@ -248,7 +248,7 @@ def startup_checks():
     if os.getenv("GEMINI_API_KEY"):
         print("Gemini API Key: detected")
     else:
-        print("Gemini API Key: NOT detected — RAG embedding/indexing may be disabled or limited")
+        print("Gemini API Key: NOT detected â€” RAG embedding/indexing may be disabled or limited")
 
     # ---------------------------------
     # Create demo user if missing
@@ -718,7 +718,7 @@ def create_course(
 def get_courses(
     db: Session = Depends(get_db)
 ):
-
+    print("GET_COURSES HIT")
     return db.query(Course).all()
 
 
@@ -1682,8 +1682,8 @@ def generate_vector_db(
         file_path = material.file_path
 
         # Backward-compatible path resolution:
-        # - Old records: file_path is a local filename → join with UPLOAD_DIR.
-        # - New records: file_path is a remote object URL → download to a temp file.
+        # - Old records: file_path is a local filename â†’ join with UPLOAD_DIR.
+        # - New records: file_path is a remote object URL â†’ download to a temp file.
         if str(file_path).startswith(("http://", "https://")):
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
                 with urlopen(file_path) as response:
@@ -2823,7 +2823,30 @@ def transcribe_youtube_video(
                 except Exception:
                     pass
 
+@app.get("/{full_path:path}", include_in_schema=False)
+def _spa(full_path: str):
 
+    print("SPA HIT:", full_path)
+
+    excluded_prefixes = (
+        "api",
+        "docs",
+        "openapi",
+        "redoc",
+        "uploads",
+        "assets",
+        "courses"
+    )
+
+    if any(full_path.startswith(p) for p in excluded_prefixes):
+        raise HTTPException(status_code=404)
+
+    index_path = os.path.join(FRONTEND_DIST, "index.html")
+
+    if os.path.exists(index_path):
+        return FileResponse(index_path, media_type="text/html")
+
+    raise HTTPException(status_code=404)
 
 
 

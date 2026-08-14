@@ -87,10 +87,18 @@ function AITutor() {
 
       console.log(
         "COURSES API RESPONSE:",
-        response.data
+        response.data,
+        "TYPE",
+        typeof response.data,
+        "IS_ARRAY",
+        Array.isArray(response.data)
       );
 
-      setCourses(response.data);
+      const _courses = Array.isArray(response.data)
+        ? response.data
+        : (response.data?.courses ?? response.data?.data ?? []);
+
+      setCourses(_courses);
 
       // Automatically select first course
       if (

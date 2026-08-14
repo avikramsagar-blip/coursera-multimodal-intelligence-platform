@@ -39,7 +39,13 @@ function Dashboard() {
 
       const response = await api.get("/courses");
 
-      setCourses(response.data);
+      console.log("COURSES RESPONSE", response.data, "TYPE", typeof response.data, "IS_ARRAY", Array.isArray(response.data));
+
+      const data = Array.isArray(response.data)
+        ? response.data
+        : (response.data?.courses ?? response.data?.data ?? []);
+
+      setCourses(data);
 
     } catch (error) {
 

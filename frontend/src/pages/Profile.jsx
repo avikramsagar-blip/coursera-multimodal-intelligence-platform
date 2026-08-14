@@ -81,7 +81,11 @@ function Profile() {
   try {
     const response = await api.get("/my-courses");
 
-    const enrollments = response.data;
+    console.log("MY-COURSES RESPONSE", response.data, "TYPE", typeof response.data, "IS_ARRAY", Array.isArray(response.data));
+
+    const enrollments = Array.isArray(response.data)
+      ? response.data
+      : (response.data?.data ?? response.data?.enrollments ?? []);
 
     setCourses(enrollments);
 
